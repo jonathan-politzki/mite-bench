@@ -8,7 +8,7 @@ from mite.tasks.claim_verification import (
     SciFActInteractionTask,
 )
 from mite.tasks.answer_quality import FiQAInteractionTask, CQADupstackInteractionTask
-from mite.tasks.advice_relevance import SummEvalInteractionTask
+from mite.tasks.summary_quality import SummEvalInteractionTask
 
 ALL_TASKS = [
     SICKREntailmentTask,

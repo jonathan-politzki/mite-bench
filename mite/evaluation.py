@@ -102,12 +102,12 @@ def separation_score(
     pos = np.asarray(pos_sims, dtype=np.float64)
     neg = np.asarray(neg_sims, dtype=np.float64)
 
-    if len(pos) == 0 or len(neg) == 0:
+    n_pos, n_neg = len(pos), len(neg)
+    if n_pos < 2 or n_neg < 2:
         return 0.0
 
     mean_diff = np.mean(pos) - np.mean(neg)
 
-    n_pos, n_neg = len(pos), len(neg)
     pooled_var = ((n_pos - 1) * np.var(pos, ddof=1) + (n_neg - 1) * np.var(neg, ddof=1)) / (
         n_pos + n_neg - 2
     )

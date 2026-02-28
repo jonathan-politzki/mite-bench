@@ -14,55 +14,16 @@ from abc import abstractmethod
 from typing import Any
 
 import numpy as np
-from scipy.stats import spearmanr
 
+from mite.evaluation import auroc as _auroc_fn, separation_score as _cohens_d
 from mite.tasks.base import MITETask, TaskResult
 
 logger = logging.getLogger(__name__)
 
-# ── Evaluation helpers ────────────────────────────────────────────────────
-
-
-def _cohens_d(group_a: np.ndarray, group_b: np.ndarray) -> float:
-    """Cohen's d effect size between two groups."""
-    na, nb = len(group_a), len(group_b)
-    if na < 2 or nb < 2:
-        return 0.0
-    va = np.var(group_a, ddof=1)
-    vb = np.var(group_b, ddof=1)
-    pooled_std = np.sqrt(((na - 1) * va + (nb - 1) * vb) / (na + nb - 2))
-    if pooled_std < 1e-12:
-        return 0.0
-    return float((np.mean(group_a) - np.mean(group_b)) / pooled_std)
-
 
 def _auroc(labels: np.ndarray, scores: np.ndarray) -> float:
-    """Area Under the ROC Curve (binary labels: 1=positive, 0=negative).
-
-    Uses the Mann-Whitney U statistic formulation for efficiency.
-    """
-    pos = scores[labels == 1]
-    neg = scores[labels == 0]
-    if len(pos) == 0 or len(neg) == 0:
-        return 0.5
-    # Count how often a positive score exceeds a negative score
-    n_pos, n_neg = len(pos), len(neg)
-    # Sort-based O(n log n) implementation
-    all_scores = np.concatenate([pos, neg])
-    all_labels = np.concatenate([np.ones(n_pos), np.zeros(n_neg)])
-    order = np.argsort(-all_scores)  # descending
-    sorted_labels = all_labels[order]
-    # Accumulate
-    tp = 0.0
-    fp = 0.0
-    auc = 0.0
-    for lbl in sorted_labels:
-        if lbl == 1:
-            tp += 1
-        else:
-            fp += 1
-            auc += tp
-    return float(auc / (n_pos * n_neg)) if (n_pos * n_neg) > 0 else 0.5
+    """Thin wrapper around mite.evaluation.auroc for ndarray inputs."""
+    return _auroc_fn(labels.tolist(), scores.tolist())
 
 
 # ── Label normalisation ──────────────────────────────────────────────────
@@ -471,7 +432,9 @@ class SciFActInteractionTask(_ClaimVerificationBase):
         all_records: list[dict[str, str]] = []
 
         # Also try to load the corpus for evidence text
-        corpus: dict[int, str] = {}
+        # Store sentences as a list so we can extract specific evidence sentences
+        corpus_sentences: dict[int, list[str]] = {}
+        corpus_full: dict[int, str] = {}
         try:
             corpus_ds = load_dataset("allenai/scifact", "corpus", trust_remote_code=True)
             for split_name in corpus_ds:
@@ -480,10 +443,12 @@ class SciFActInteractionTask(_ClaimVerificationBase):
                     title = str(row.get("title", ""))
                     abstract_sents = row.get("abstract", [])
                     if isinstance(abstract_sents, list):
-                        abstract = " ".join(str(s) for s in abstract_sents)
+                        sentences = [str(s) for s in abstract_sents]
                     else:
-                        abstract = str(abstract_sents)
-                    corpus[doc_id] = f"{title}. {abstract}".strip()
+                        sentences = [str(abstract_sents)]
+                    corpus_sentences[doc_id] = sentences
+                    abstract = " ".join(sentences)
+                    corpus_full[doc_id] = f"{title}. {abstract}".strip()
         except Exception as exc:  # noqa: BLE001
             logger.warning("Could not load SciFact corpus: %s", exc)
 
@@ -516,13 +481,20 @@ class SciFActInteractionTask(_ClaimVerificationBase):
                                         lbl = "REFUTES"
                                 if lbl is None:
                                     continue
-                                # Get evidence text
-                                ev_text = corpus.get(doc_id, "")
+                                # Get evidence text from specific sentence indices
+                                ev_text = ""
+                                sents = ev.get("sentences", [])
+                                if isinstance(sents, list) and sents and doc_id in corpus_sentences:
+                                    doc_sents = corpus_sentences[doc_id]
+                                    extracted = [
+                                        doc_sents[idx] for idx in sents
+                                        if isinstance(idx, int) and 0 <= idx < len(doc_sents)
+                                    ]
+                                    if extracted:
+                                        ev_text = " ".join(extracted)
                                 if not ev_text:
-                                    # Try sentence indices
-                                    sents = ev.get("sentences", [])
-                                    if isinstance(sents, list) and sents:
-                                        ev_text = " ".join(str(s) for s in sents)
+                                    # Fall back to the full abstract
+                                    ev_text = corpus_full.get(doc_id, "")
                                 if ev_text.strip():
                                     all_records.append({
                                         "claim": claim,

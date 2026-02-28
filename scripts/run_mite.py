@@ -12,7 +12,7 @@ Example usage:
     # Run specific models on specific tasks
     python scripts/run_mite.py \
         --models all-MiniLM-L6-v2 BAAI/bge-small-en-v1.5 \
-        --tasks SICK-R-Entailment FEVER-Interaction
+        --tasks SICKREntailment FEVERInteraction
 
     # Custom batch size and output directory
     python scripts/run_mite.py --batch-size 128 --output-dir results/run1
@@ -67,7 +67,7 @@ def parse_args() -> argparse.Namespace:
         default=["all"],
         help=(
             "Task names to evaluate, or 'all' for every task. "
-            "Use the task_name attribute (e.g. SICK-R-Entailment, FEVER-Interaction)."
+            "Use the task_name attribute (e.g. SICKREntailment, FEVERInteraction)."
         ),
     )
     parser.add_argument(
@@ -123,7 +123,7 @@ def create_model(model_name: str):
         from mite.models import SentenceTransformerModel
 
         return SentenceTransformerModel(model_name)
-    except (ImportError, Exception):
+    except ImportError:
         pass
 
     # Fallback: wrap sentence-transformers directly.

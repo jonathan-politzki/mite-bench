@@ -23,7 +23,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -117,13 +116,13 @@ MTEB_LEADERBOARD_APPROX: dict[str, dict[str, float]] = {
 # ── Mapping from MITE task names to MTEB dataset/metric ────────────────────
 
 MITE_TO_MTEB_MAP = {
-    "SICK-R-Entailment": {"mteb_dataset": "SICK-R", "leaderboard_key": "SICK-R"},
-    "FEVER-Interaction": {"mteb_dataset": "FEVER", "leaderboard_key": "FEVER"},
-    "ClimateFEVER-Interaction": {"mteb_dataset": "FEVER", "leaderboard_key": "FEVER"},
-    "SciFact-Interaction": {"mteb_dataset": "FEVER", "leaderboard_key": "FEVER"},
-    "FiQA-Interaction": {"mteb_dataset": "FiQA2018", "leaderboard_key": "FiQA"},
-    "CQADupstack-Interaction": {"mteb_dataset": "FiQA2018", "leaderboard_key": "FiQA"},
-    "SummEval-Interaction": {"mteb_dataset": "SummEval", "leaderboard_key": "SummEval"},
+    "SICKREntailment": {"mteb_dataset": "SICK-R", "leaderboard_key": "SICK-R"},
+    "FEVERInteraction": {"mteb_dataset": "FEVER", "leaderboard_key": "FEVER"},
+    "ClimateFEVERInteraction": {"mteb_dataset": "FEVER", "leaderboard_key": "FEVER"},
+    "SciFActInteraction": {"mteb_dataset": "FEVER", "leaderboard_key": "FEVER"},
+    "FiQAAnswerQuality": {"mteb_dataset": "FiQA2018", "leaderboard_key": "FiQA"},
+    "CQADupstackAnswerQuality": {"mteb_dataset": "FiQA2018", "leaderboard_key": "FiQA"},
+    "SummEvalQuality": {"mteb_dataset": "SummEval", "leaderboard_key": "SummEval"},
 }
 
 

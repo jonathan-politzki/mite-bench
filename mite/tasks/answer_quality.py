@@ -20,33 +20,15 @@ from typing import Any
 import numpy as np
 from scipy.stats import spearmanr
 
+from mite.evaluation import auroc as _auroc_fn
 from mite.tasks.base import MITETask, TaskResult
 
 logger = logging.getLogger(__name__)
 
 
-# ── Evaluation helpers ────────────────────────────────────────────────────
-
-
 def _auroc(labels: np.ndarray, scores: np.ndarray) -> float:
-    """Area Under the ROC Curve (binary labels: 1=positive, 0=negative)."""
-    pos = scores[labels == 1]
-    neg = scores[labels == 0]
-    if len(pos) == 0 or len(neg) == 0:
-        return 0.5
-    n_pos, n_neg = len(pos), len(neg)
-    all_scores = np.concatenate([pos, neg])
-    all_labels = np.concatenate([np.ones(n_pos), np.zeros(n_neg)])
-    order = np.argsort(-all_scores)
-    sorted_labels = all_labels[order]
-    tp = 0.0
-    auc = 0.0
-    for lbl in sorted_labels:
-        if lbl == 1:
-            tp += 1
-        else:
-            auc += tp
-    return float(auc / (n_pos * n_neg)) if (n_pos * n_neg) > 0 else 0.5
+    """Thin wrapper around mite.evaluation.auroc for ndarray inputs."""
+    return _auroc_fn(labels.tolist(), scores.tolist())
 
 
 # ── FiQA ──────────────────────────────────────────────────────────────────

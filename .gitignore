@@ -14,6 +14,6 @@ build/
 *.fls
 *.synctex.gz
 .DS_Store
-results/
+# results/ — we track experiment results for reproducibility
 data/
 *.env

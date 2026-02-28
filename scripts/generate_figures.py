@@ -104,13 +104,13 @@ MTEB_LEADERBOARD_APPROX: dict[str, dict[str, float]] = {
 # ── MITE-to-MTEB task mapping ──────────────────────────────────────────────
 
 MITE_TO_MTEB_KEY = {
-    "SICK-R-Entailment": "SICK-R",
-    "FEVER-Interaction": "FEVER",
-    "ClimateFEVER-Interaction": "FEVER",
-    "SciFact-Interaction": "FEVER",
-    "FiQA-Interaction": "FiQA",
-    "CQADupstack-Interaction": "FiQA",
-    "SummEval-Interaction": "SummEval",
+    "SICKREntailment": "SICK-R",
+    "FEVERInteraction": "FEVER",
+    "ClimateFEVERInteraction": "FEVER",
+    "SciFActInteraction": "FEVER",
+    "FiQAAnswerQuality": "FiQA",
+    "CQADupstackAnswerQuality": "FiQA",
+    "SummEvalQuality": "SummEval",
 }
 
 
@@ -339,7 +339,7 @@ def figure2_claim_distributions(
     # we can reconstruct approximate distributions. Otherwise, generate
     # synthetic illustrative distributions from the metric values.
 
-    claim_tasks = ["FEVER-Interaction", "ClimateFEVER-Interaction", "SciFact-Interaction"]
+    claim_tasks = ["FEVERInteraction", "ClimateFEVERInteraction", "SciFActInteraction"]
     available_tasks = []
 
     for task in claim_tasks:
@@ -453,7 +453,7 @@ def figure3_correlation_bars(
 
     tasks = list(task_rhos.keys())
     rhos = [task_rhos[t] for t in tasks]
-    short_tasks = [t.replace("-Interaction", "").replace("-Entailment", "\n(Entail.)") for t in tasks]
+    short_tasks = [t.replace("Interaction", "").replace("Entailment", "\n(Entail.)").replace("AnswerQuality", "").replace("Quality", "") for t in tasks]
 
     fig, ax = plt.subplots(figsize=(max(6, len(tasks) * 1.2), 4))
 
@@ -535,7 +535,7 @@ def figure4_score_heatmap(
 
     # Shorten names.
     model_labels = [short_name(m) for m in models]
-    task_labels = [t.replace("-Interaction", "").replace("-Entailment", "\n(Entail.)") for t in tasks]
+    task_labels = [t.replace("Interaction", "").replace("Entailment", "\n(Entail.)").replace("AnswerQuality", "").replace("Quality", "") for t in tasks]
 
     fig, ax = plt.subplots(figsize=(max(7, len(tasks) * 1.5), max(5, len(models) * 0.5)))
 

@@ -15,22 +15,10 @@ from typing import Any
 import numpy as np
 from scipy.stats import spearmanr
 
+from mite.evaluation import separation_score as _cohens_d
 from mite.tasks.base import MITETask, TaskResult
 
 logger = logging.getLogger(__name__)
-
-# ── Evaluation helpers ────────────────────────────────────────────────────
-
-def _cohens_d(group_a: np.ndarray, group_b: np.ndarray) -> float:
-    """Cohen's d effect size between two groups."""
-    na, nb = len(group_a), len(group_b)
-    if na < 2 or nb < 2:
-        return 0.0
-    va, vb = np.var(group_a, ddof=1), np.var(group_b, ddof=1)
-    pooled_std = np.sqrt(((na - 1) * va + (nb - 1) * vb) / (na + nb - 2))
-    if pooled_std < 1e-12:
-        return 0.0
-    return float((np.mean(group_a) - np.mean(group_b)) / pooled_std)
 
 
 def _macro_f1(y_true: list[str], y_pred: list[str]) -> float:
@@ -50,21 +38,24 @@ def _macro_f1(y_true: list[str], y_pred: list[str]) -> float:
 
 # ── Label normalisation ──────────────────────────────────────────────────
 
-_ENTAILMENT_MAP = {
+# yangwang825/sick uses integer labels: 0=contradiction, 1=neutral, 2=entailment
+_INT_LABEL_MAP = {0: "CONTRADICTION", 1: "NEUTRAL", 2: "ENTAILMENT"}
+
+_STR_LABEL_MAP = {
     "ENTAILMENT": "ENTAILMENT",
     "entailment": "ENTAILMENT",
-    "A": "ENTAILMENT",
+    "A_ENTAILS_B": "ENTAILMENT",
     "CONTRADICTION": "CONTRADICTION",
     "contradiction": "CONTRADICTION",
-    "C": "CONTRADICTION",
     "NEUTRAL": "NEUTRAL",
     "neutral": "NEUTRAL",
-    "B": "NEUTRAL",
 }
 
 
-def _normalise_label(raw: str) -> str | None:
-    return _ENTAILMENT_MAP.get(str(raw).strip())
+def _normalise_label(raw) -> str | None:
+    if isinstance(raw, (int, float)):
+        return _INT_LABEL_MAP.get(int(raw))
+    return _STR_LABEL_MAP.get(str(raw).strip())
 
 
 # ── Task implementation ──────────────────────────────────────────────────
@@ -97,106 +88,61 @@ class SICKREntailmentTask(MITETask):
     # ── Data loading ──────────────────────────────────────────────────
 
     def load_data(self) -> None:
-        """Load SICK with entailment labels.
+        """Load SICK with both entailment labels and relatedness scores.
 
-        We try several HuggingFace dataset ids until one succeeds.  The
-        original SICK dataset contains entailment labels; the MTEB version
-        may only have relatedness scores.
+        Strategy: load yangwang825/sick (has entailment labels) and
+        mteb/sickr-sts (has relatedness scores), then join on sentence text.
         """
         from datasets import load_dataset
 
-        dataset = None
-        sources = [
-            ("sentence-transformers/sick", None),
-            ("mariannefelice/SICK", None),
-            ("sick", None),
-        ]
+        # 1. Load entailment labels from yangwang825/sick
+        logger.info("Loading entailment labels from yangwang825/sick...")
+        ds_ent = load_dataset("yangwang825/sick", split="test")
 
-        for ds_name, config in sources:
-            try:
-                logger.info("Trying dataset %s (config=%s)", ds_name, config)
-                dataset = load_dataset(ds_name, config, trust_remote_code=True)
-                # Quick check: does it have an entailment label column?
-                sample = next(iter(dataset[list(dataset.keys())[0]]))
-                has_entailment = any(
-                    k in sample
-                    for k in ("label", "entailment_label", "entailment_judgment")
-                )
-                if has_entailment:
-                    break
-                logger.info("Dataset %s loaded but no entailment labels found, trying next.", ds_name)
-                dataset = None
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Could not load %s: %s", ds_name, exc)
-                dataset = None
+        # 2. Load relatedness scores from mteb/sickr-sts
+        logger.info("Loading relatedness scores from mteb/sickr-sts...")
+        ds_sim = load_dataset("mteb/sickr-sts", split="test")
 
-        if dataset is None:
-            raise RuntimeError(
-                "Could not load SICK dataset with entailment labels. "
-                "Install `datasets` and ensure network access."
-            )
+        # 3. Build relatedness lookup by sentence pair
+        sim_lookup: dict[tuple[str, str], float] = {}
+        for row in ds_sim:
+            key = (row["sentence1"].strip(), row["sentence2"].strip())
+            sim_lookup[key] = row["score"]
 
-        # Use the test split if available, otherwise fall back to the full dataset
-        if "test" in dataset:
-            split = dataset["test"]
-        elif "default" in dataset:
-            split = dataset["default"]
-        else:
-            split = dataset[list(dataset.keys())[0]]
-
-        # Determine column names ─────────────────────────────────────
-        columns = set(split.column_names)
-        sent_a_col = next(
-            (c for c in ("sentence_A", "sentence1", "sent_1", "premise") if c in columns),
-            None,
-        )
-        sent_b_col = next(
-            (c for c in ("sentence_B", "sentence2", "sent_2", "hypothesis") if c in columns),
-            None,
-        )
-        label_col = next(
-            (c for c in ("entailment_label", "entailment_judgment", "label") if c in columns),
-            None,
-        )
-        relatedness_col = next(
-            (c for c in ("relatedness_score", "score", "label_score", "relatedness") if c in columns),
-            None,
-        )
-
-        if sent_a_col is None or sent_b_col is None or label_col is None:
-            raise RuntimeError(
-                f"Could not identify required columns. Available: {columns}"
-            )
-
-        # Build internal data list ────────────────────────────────────
+        # 4. Join: iterate entailment dataset, match relatedness scores
         records: list[dict[str, Any]] = []
         relatedness_scores: list[float] = []
 
-        for row in split:
-            lbl = _normalise_label(row[label_col])
+        for row in ds_ent:
+            lbl = _normalise_label(row["label"])
             if lbl is None:
                 continue
-            records.append(
-                {
-                    "sentence_a": str(row[sent_a_col]),
-                    "sentence_b": str(row[sent_b_col]),
-                    "entailment_label": lbl,
-                }
-            )
-            if relatedness_col and row.get(relatedness_col) is not None:
-                relatedness_scores.append(float(row[relatedness_col]))
-            else:
-                relatedness_scores.append(float("nan"))
+            sent_a = str(row["text1"])
+            sent_b = str(row["text2"])
+            records.append({
+                "sentence_a": sent_a,
+                "sentence_b": sent_b,
+                "entailment_label": lbl,
+            })
+            # Match relatedness score
+            key = (sent_a.strip(), sent_b.strip())
+            rel = sim_lookup.get(key, float("nan"))
+            relatedness_scores.append(rel)
 
         self.data = records
         self._relatedness = relatedness_scores
         self._is_loaded = True
+
+        n_matched = sum(1 for r in relatedness_scores if not np.isnan(r))
+        from collections import Counter
+        label_counts = Counter(r["entailment_label"] for r in records)
         logger.info(
-            "Loaded %d SICK pairs (%s / %s / %s)",
+            "Loaded %d SICK pairs (E=%d / N=%d / C=%d), %d with relatedness scores",
             len(records),
-            sum(1 for r in records if r["entailment_label"] == "ENTAILMENT"),
-            sum(1 for r in records if r["entailment_label"] == "NEUTRAL"),
-            sum(1 for r in records if r["entailment_label"] == "CONTRADICTION"),
+            label_counts["ENTAILMENT"],
+            label_counts["NEUTRAL"],
+            label_counts["CONTRADICTION"],
+            n_matched,
         )
 
     # ── Pair interface ────────────────────────────────────────────────
