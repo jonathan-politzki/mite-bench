@@ -1,0 +1,131 @@
+{
+  "task": "FEVERInteraction",
+  "models": {
+    "all-MiniLM-L6-v2": {
+      "primary_score": 0.7861123120242381,
+      "metrics": {
+        "separation_score": 0.7861123120242381,
+        "auroc": 0.712148248070487,
+        "mean_sim_supports": 0.6857606172561646,
+        "mean_sim_refutes": 0.589533269405365,
+        "std_sim_supports": 0.11896292120218277,
+        "std_sim_refutes": 0.12551459670066833,
+        "n_supports": 484,
+        "n_refutes": 484,
+        "n_total": 968
+      }
+    },
+    "BAAI/bge-small-en-v1.5": {
+      "primary_score": 0.9167742257565835,
+      "metrics": {
+        "separation_score": 0.9167742257565835,
+        "auroc": 0.7476265282426063,
+        "mean_sim_supports": 0.7986968755722046,
+        "mean_sim_refutes": 0.7300434708595276,
+        "std_sim_supports": 0.07084736227989197,
+        "std_sim_refutes": 0.07857010513544083,
+        "n_supports": 484,
+        "n_refutes": 484,
+        "n_total": 968
+      }
+    },
+    "BAAI/bge-base-en-v1.5": {
+      "primary_score": 0.9494612322173073,
+      "metrics": {
+        "separation_score": 0.9494612322173073,
+        "auroc": 0.7500597636773445,
+        "mean_sim_supports": 0.7751135230064392,
+        "mean_sim_refutes": 0.7005937099456787,
+        "std_sim_supports": 0.07343759387731552,
+        "std_sim_refutes": 0.08307644724845886,
+        "n_supports": 484,
+        "n_refutes": 484,
+        "n_total": 968
+      }
+    },
+    "intfloat/e5-small-v2": {
+      "primary_score": 0.8522610581475604,
+      "metrics": {
+        "separation_score": 0.8522610581475604,
+        "auroc": 0.7265342189741139,
+        "mean_sim_supports": 0.8807220458984375,
+        "mean_sim_refutes": 0.8496198058128357,
+        "std_sim_supports": 0.03571128845214844,
+        "std_sim_refutes": 0.037186093628406525,
+        "n_supports": 484,
+        "n_refutes": 484,
+        "n_total": 968
+      }
+    },
+    "intfloat/e5-base-v2": {
+      "primary_score": 0.7579196444297345,
+      "metrics": {
+        "separation_score": 0.7579196444297345,
+        "auroc": 0.7077556177856703,
+        "mean_sim_supports": 0.868251383304596,
+        "mean_sim_refutes": 0.8401021361351013,
+        "std_sim_supports": 0.03693792596459389,
+        "std_sim_refutes": 0.03726474195718765,
+        "n_supports": 484,
+        "n_refutes": 484,
+        "n_total": 968
+      }
+    },
+    "intfloat/e5-large-v2": {
+      "primary_score": 0.7310887674055448,
+      "metrics": {
+        "separation_score": 0.7310887674055448,
+        "auroc": 0.6967078751451403,
+        "mean_sim_supports": 0.854601263999939,
+        "mean_sim_refutes": 0.826604425907135,
+        "std_sim_supports": 0.03845709189772606,
+        "std_sim_refutes": 0.038052041083574295,
+        "n_supports": 484,
+        "n_refutes": 484,
+        "n_total": 968
+      }
+    },
+    "sentence-transformers/all-mpnet-base-v2": {
+      "primary_score": 0.8151480065176084,
+      "metrics": {
+        "separation_score": 0.8151480065176084,
+        "auroc": 0.7232216037155932,
+        "mean_sim_supports": 0.6875389218330383,
+        "mean_sim_refutes": 0.582180917263031,
+        "std_sim_supports": 0.12471005320549011,
+        "std_sim_refutes": 0.13337750732898712,
+        "n_supports": 484,
+        "n_refutes": 484,
+        "n_total": 968
+      }
+    },
+    "nomic-ai/nomic-embed-text-v1.5": {
+      "primary_score": 0.6887189954066366,
+      "metrics": {
+        "separation_score": 0.6887189954066366,
+        "auroc": 0.6889599412608429,
+        "mean_sim_supports": 0.8107017278671265,
+        "mean_sim_refutes": 0.7623000144958496,
+        "std_sim_supports": 0.06722983717918396,
+        "std_sim_refutes": 0.07305968552827835,
+        "n_supports": 484,
+        "n_refutes": 484,
+        "n_total": 968
+      }
+    },
+    "thenlper/gte-base": {
+      "primary_score": 0.6802111739196492,
+      "metrics": {
+        "separation_score": 0.6802111739196492,
+        "auroc": 0.6875725701796326,
+        "mean_sim_supports": 0.9200501441955566,
+        "mean_sim_refutes": 0.9002816677093506,
+        "std_sim_supports": 0.02861040271818638,
+        "std_sim_refutes": 0.02944818325340748,
+        "n_supports": 484,
+        "n_refutes": 484,
+        "n_total": 968
+      }
+    }
+  }
+}

@@ -62,174 +62,73 @@ class FiQAInteractionTask(MITETask):
         self._grouped: dict[str, list[dict[str, Any]]] = {}
 
     def load_data(self) -> None:
-        """Load FiQA in BEIR format: corpus, queries, qrels."""
+        """Load FiQA in BEIR format: corpus, queries, qrels as separate configs."""
         from datasets import load_dataset
 
-        dataset = None
-        sources = [
-            ("mteb/fiqa", None),
-            ("BeIR/fiqa", None),
-            ("fiqa", None),
-        ]
+        ds_name = "mteb/fiqa"
+        logger.info("Loading FiQA corpus, queries, and qrels from %s", ds_name)
 
-        for ds_name, config in sources:
-            try:
-                logger.info("Trying FiQA dataset %s (config=%s)", ds_name, config)
-                if config:
-                    dataset = load_dataset(ds_name, config, trust_remote_code=True)
-                else:
-                    dataset = load_dataset(ds_name, trust_remote_code=True)
-                break
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Could not load %s: %s", ds_name, exc)
-                dataset = None
+        # BEIR datasets on mteb/ use separate configs for corpus, queries, and default (qrels)
+        corpus_ds = load_dataset(ds_name, "corpus", split="corpus")
+        queries_ds = load_dataset(ds_name, "queries", split="queries")
+        qrels_ds = load_dataset(ds_name, split="test")
 
-        if dataset is None:
-            raise RuntimeError("Could not load FiQA dataset.")
+        # Build corpus lookup
+        corpus: dict[str, str] = {}
+        for row in corpus_ds:
+            doc_id = str(row["_id"])
+            title = str(row.get("title", ""))
+            text = str(row.get("text", ""))
+            corpus[doc_id] = f"{title}. {text}".strip(". ") if title else text
 
-        # BEIR format has corpus, queries, and qrels splits/subsets
-        available_splits = list(dataset.keys())
-        logger.info("FiQA splits: %s", available_splits)
+        # Build queries lookup
+        queries: dict[str, str] = {}
+        for row in queries_ds:
+            q_id = str(row["_id"])
+            queries[q_id] = str(row["text"])
 
-        # Try to parse BEIR-style format (corpus + queries + qrels)
-        if self._try_load_beir_format(dataset):
-            return
+        # Build qrels: query_id -> {corpus_id: score}
+        qrels: dict[str, dict[str, int]] = defaultdict(dict)
+        for row in qrels_ds:
+            q_id = str(row["query-id"])
+            c_id = str(row["corpus-id"])
+            score = int(row["score"])
+            if q_id in queries and c_id in corpus:
+                qrels[q_id][c_id] = score
 
-        # Fallback: try direct format with question/answer columns
-        self._try_load_direct_format(dataset)
-
-    def _try_load_beir_format(self, dataset: Any) -> bool:
-        """Attempt to load from BEIR-style corpus/queries/qrels format."""
-        try:
-            # Load corpus
-            corpus: dict[str, str] = {}
-            if "corpus" in dataset:
-                for row in dataset["corpus"]:
-                    doc_id = str(row.get("_id", row.get("id", "")))
-                    title = str(row.get("title", ""))
-                    text = str(row.get("text", ""))
-                    corpus[doc_id] = f"{title}. {text}".strip(". ") if title else text
-
-            # Load queries
-            queries: dict[str, str] = {}
-            if "queries" in dataset:
-                for row in dataset["queries"]:
-                    q_id = str(row.get("_id", row.get("id", "")))
-                    queries[q_id] = str(row.get("text", row.get("query", "")))
-
-            if not corpus or not queries:
-                return False
-
-            # Load qrels from the test or default split
-            qrels: dict[str, dict[str, int]] = defaultdict(dict)
-            for split_name in ("test", "validation", "default"):
-                if split_name in dataset:
-                    split = dataset[split_name]
-                    cols = set(split.column_names)
-                    if "query-id" in cols and "corpus-id" in cols and "score" in cols:
-                        for row in split:
-                            q_id = str(row["query-id"])
-                            c_id = str(row["corpus-id"])
-                            score = int(row["score"])
-                            if q_id in queries and c_id in corpus:
-                                qrels[q_id][c_id] = score
-                        break
-
-            if not qrels:
-                return False
-
-            # Group by query: only keep queries with 2+ answers at different relevance levels
-            grouped: dict[str, list[dict[str, Any]]] = {}
-            for q_id, doc_scores in qrels.items():
-                if len(doc_scores) < 2:
-                    continue
-                scores = set(doc_scores.values())
-                if len(scores) < 2:
-                    continue  # need variation in relevance for Spearman
-                entries = []
-                for c_id, rel in doc_scores.items():
-                    entries.append({
-                        "question": queries[q_id],
-                        "answer": corpus[c_id],
-                        "relevance": rel,
-                        "query_id": q_id,
-                    })
-                grouped[q_id] = entries
-
-            if not grouped:
-                return False
-
-            # Cap to ~5000 total pairs
-            self._cap_grouped(grouped, max_total=5000)
-            self._grouped = grouped
-
-            all_records = []
-            for entries in grouped.values():
-                all_records.extend(entries)
-            self.data = all_records
-            self._is_loaded = True
-            logger.info(
-                "Loaded FiQA BEIR: %d queries, %d total pairs",
-                len(grouped), len(all_records),
-            )
-            return True
-
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("BEIR parse failed: %s", exc)
-            return False
-
-    def _try_load_direct_format(self, dataset: Any) -> None:
-        """Fallback: parse dataset with question/answer columns directly."""
-        for split_name in ("test", "validation", "train"):
-            if split_name not in dataset:
+        # Group by query: only keep queries with 2+ answers at different relevance levels
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for q_id, doc_scores in qrels.items():
+            if len(doc_scores) < 2:
                 continue
-            split = dataset[split_name]
-            columns = set(split.column_names)
-
-            question_col = next(
-                (c for c in ("question", "query", "text_a", "sentence1") if c in columns), None
-            )
-            answer_col = next(
-                (c for c in ("answer", "text", "text_b", "sentence2") if c in columns), None
-            )
-            score_col = next(
-                (c for c in ("score", "relevance", "label", "rating") if c in columns), None
-            )
-
-            if question_col is None or answer_col is None:
+            scores = set(doc_scores.values())
+            if len(scores) < 2:
                 continue
-
-            # Group by question text
-            grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-            for i, row in enumerate(split):
-                q = str(row[question_col])
-                a = str(row[answer_col])
-                rel = float(row.get(score_col, 1)) if score_col else 1.0
-                grouped[q].append({
-                    "question": q,
-                    "answer": a,
+            entries = []
+            for c_id, rel in doc_scores.items():
+                entries.append({
+                    "question": queries[q_id],
+                    "answer": corpus[c_id],
                     "relevance": rel,
-                    "query_id": str(i),
+                    "query_id": q_id,
                 })
+            grouped[q_id] = entries
 
-            # Filter to queries with 2+ answers at different relevance levels
-            filtered = {
-                q: entries for q, entries in grouped.items()
-                if len(entries) >= 2 and len(set(e["relevance"] for e in entries)) >= 2
-            }
+        if not grouped:
+            raise RuntimeError("No valid FiQA query groups found.")
 
-            if filtered:
-                self._cap_grouped(filtered, max_total=5000)
-                self._grouped = filtered
-                self.data = [e for entries in filtered.values() for e in entries]
-                self._is_loaded = True
-                logger.info(
-                    "Loaded FiQA direct: %d queries, %d total pairs",
-                    len(filtered), len(self.data),
-                )
-                return
+        self._cap_grouped(grouped, max_total=5000)
+        self._grouped = grouped
 
-        raise RuntimeError("Could not parse FiQA dataset in any format.")
+        all_records = []
+        for entries in grouped.values():
+            all_records.extend(entries)
+        self.data = all_records
+        self._is_loaded = True
+        logger.info(
+            "Loaded FiQA: %d queries, %d total pairs", len(grouped), len(all_records)
+        )
+
 
     @staticmethod
     def _cap_grouped(

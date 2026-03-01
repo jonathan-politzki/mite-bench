@@ -1,0 +1,50 @@
+{
+  "task": "SummEvalQuality",
+  "models": {
+    "all-MiniLM-L6-v2": {
+      "primary_score": 0.24682532595410053,
+      "metrics": {
+        "mean_spearman": 0.24682532595410053,
+        "median_spearman": 0.24557319420017348,
+        "pairwise_accuracy": 0.5930171045670958,
+        "global_spearman": 0.24909639033009914,
+        "n_sources_evaluated": 100,
+        "n_sources_total": 100,
+        "n_pairs_total": 1600,
+        "n_pairwise_comparisons": 11342,
+        "mean_quality": 4.130729166666667,
+        "std_quality": 0.6634179878849423
+      }
+    },
+    "BAAI/bge-base-en-v1.5": {
+      "primary_score": 0.3296629168827174,
+      "metrics": {
+        "mean_spearman": 0.3296629168827174,
+        "median_spearman": 0.3672574454932021,
+        "pairwise_accuracy": 0.624581202609769,
+        "global_spearman": 0.33502902828021724,
+        "n_sources_evaluated": 100,
+        "n_sources_total": 100,
+        "n_pairs_total": 1600,
+        "n_pairwise_comparisons": 11342,
+        "mean_quality": 4.130729166666667,
+        "std_quality": 0.6634179878849423
+      }
+    },
+    "sentence-transformers/all-mpnet-base-v2": {
+      "primary_score": 0.24593026423981676,
+      "metrics": {
+        "mean_spearman": 0.24593026423981676,
+        "median_spearman": 0.2501825843437424,
+        "pairwise_accuracy": 0.5934579439252337,
+        "global_spearman": 0.26619930035238226,
+        "n_sources_evaluated": 100,
+        "n_sources_total": 100,
+        "n_pairs_total": 1600,
+        "n_pairwise_comparisons": 11342,
+        "mean_quality": 4.130729166666667,
+        "std_quality": 0.6634179878849423
+      }
+    }
+  }
+}
