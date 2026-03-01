@@ -1,0 +1,105 @@
+{
+  "task": "SICKREntailment",
+  "experiment": "expanded_15_models",
+  "rank_correlation": {
+    "rho": -0.7607,
+    "p_value": 0.000991
+  },
+  "mteb_range": {
+    "min": 0.5535,
+    "max": 0.8123,
+    "spread": 0.2588
+  },
+  "models": {
+    "average_word_embeddings_glove.6B.300d": {
+      "mteb_spearman": 0.5535,
+      "separation": 0.5298,
+      "mean_sim_entailment": 0.951,
+      "mean_sim_contradiction": 0.897
+    },
+    "sentence-transformers/paraphrase-MiniLM-L3-v2": {
+      "mteb_spearman": 0.762,
+      "separation": -0.9588,
+      "mean_sim_entailment": 0.765,
+      "mean_sim_contradiction": 0.876
+    },
+    "sentence-transformers/all-distilroberta-v1": {
+      "mteb_spearman": 0.8011,
+      "separation": -1.8563,
+      "mean_sim_entailment": 0.629,
+      "mean_sim_contradiction": 0.858
+    },
+    "all-MiniLM-L6-v2": {
+      "mteb_spearman": 0.7715,
+      "separation": -0.9017,
+      "mean_sim_entailment": 0.757,
+      "mean_sim_contradiction": 0.864
+    },
+    "BAAI/bge-small-en-v1.5": {
+      "mteb_spearman": 0.7909,
+      "separation": -1.8824,
+      "mean_sim_entailment": 0.776,
+      "mean_sim_contradiction": 0.918
+    },
+    "BAAI/bge-base-en-v1.5": {
+      "mteb_spearman": 0.799,
+      "separation": -1.8604,
+      "mean_sim_entailment": 0.762,
+      "mean_sim_contradiction": 0.909
+    },
+    "intfloat/e5-small-v2": {
+      "mteb_spearman": 0.7871,
+      "separation": -2.1693,
+      "mean_sim_entailment": 0.882,
+      "mean_sim_contradiction": 0.96
+    },
+    "intfloat/e5-base-v2": {
+      "mteb_spearman": 0.7751,
+      "separation": -1.4181,
+      "mean_sim_entailment": 0.893,
+      "mean_sim_contradiction": 0.95
+    },
+    "intfloat/e5-large-v2": {
+      "mteb_spearman": 0.7865,
+      "separation": -2.2558,
+      "mean_sim_entailment": 0.87,
+      "mean_sim_contradiction": 0.956
+    },
+    "sentence-transformers/all-mpnet-base-v2": {
+      "mteb_spearman": 0.8049,
+      "separation": -2.4556,
+      "mean_sim_entailment": 0.545,
+      "mean_sim_contradiction": 0.86
+    },
+    "nomic-ai/nomic-embed-text-v1.5": {
+      "mteb_spearman": 0.7799,
+      "separation": -0.9985,
+      "mean_sim_entailment": 0.852,
+      "mean_sim_contradiction": 0.922
+    },
+    "thenlper/gte-base": {
+      "mteb_spearman": 0.7828,
+      "separation": -1.0776,
+      "mean_sim_entailment": 0.923,
+      "mean_sim_contradiction": 0.959
+    },
+    "BAAI/bge-large-en-v1.5": {
+      "mteb_spearman": 0.8123,
+      "separation": -2.1084,
+      "mean_sim_entailment": 0.751,
+      "mean_sim_contradiction": 0.914
+    },
+    "thenlper/gte-large": {
+      "mteb_spearman": 0.7908,
+      "separation": -1.2798,
+      "mean_sim_entailment": 0.919,
+      "mean_sim_contradiction": 0.961
+    },
+    "intfloat/multilingual-e5-large": {
+      "mteb_spearman": 0.7977,
+      "separation": -2.2993,
+      "mean_sim_entailment": 0.873,
+      "mean_sim_contradiction": 0.958
+    }
+  }
+}
