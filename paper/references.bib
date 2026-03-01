@@ -4,19 +4,34 @@
 
 % --- Core benchmark papers ---
 
-@article{muennighoff2023mteb,
+@inproceedings{muennighoff2023mteb,
   title={{MTEB}: Massive Text Embedding Benchmark},
   author={Muennighoff, Niklas and Tazi, Nouamane and Magne, Lo{\"\i}c and Reimers, Nils},
-  journal={arXiv preprint arXiv:2210.07316},
-  year={2023},
-  note={Proceedings of EACL 2023}
+  booktitle={Proceedings of the 17th Conference of the European Chapter of the Association for Computational Linguistics (EACL)},
+  pages={2014--2037},
+  year={2023}
+}
+
+@article{mmteb2025,
+  title={{MMTEB}: Massive Multilingual Text Embedding Benchmark},
+  author={Enevoldsen, Kenneth and Huang, Isaac and {MMTEB Contributors}},
+  journal={arXiv preprint arXiv:2502.13595},
+  year={2025},
+  note={ICLR 2025}
 }
 
 @inproceedings{thakur2021beir,
   title={{BEIR}: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models},
   author={Thakur, Nandan and Reimers, Nils and R{\"u}ckl{\'e}, Andreas and Srivastava, Abhishek and Gurevych, Iryna},
-  booktitle={Proceedings of the Neural Information Processing Systems Track on Datasets and Benchmarks (NeurIPS)},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
   year={2021}
+}
+
+@article{chung2025maintaining,
+  title={Maintaining {MTEB}: Towards Long Term Usability and Reproducibility of Embedding Benchmarks},
+  author={Chung, Isaac and {MTEB Contributors}},
+  journal={arXiv preprint arXiv:2506.21182},
+  year={2025}
 }
 
 % --- Embedding model papers ---
@@ -70,6 +85,13 @@
   year={2019}
 }
 
+@inproceedings{humeau2020polyencoders,
+  title={Poly-encoders: Architectures and Pre-training Strategies for Fast and Accurate Multi-sentence Scoring},
+  author={Humeau, Samuel and Shuster, Kurt and Boureau, Marie-Ange and Weston, Jason},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2020}
+}
+
 % --- NLI and entailment datasets ---
 
 @inproceedings{bowman2015snli,
@@ -107,39 +129,6 @@
   year={2018}
 }
 
-@article{diggelmann2020climatefever,
-  title={{CLIMATE-FEVER}: A Dataset for Verification of Real-World Climate Claims},
-  author={Diggelmann, Thomas and Boyd-Graber, Jordan and Bulian, Jannis and Ciaramita, Massimiliano and Leippold, Markus},
-  journal={arXiv preprint arXiv:2012.00614},
-  year={2020}
-}
-
-@inproceedings{wadden2020scifact,
-  title={Fact or Fiction: Verifying Scientific Claims},
-  author={Wadden, David and Lin, Shanchuan and Lo, Kyle and Wang, Lucy Lu and van Zuylen, Madeleine and Cohan, Arman and Hajishirzi, Hannaneh},
-  booktitle={Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
-  pages={7534--7550},
-  year={2020}
-}
-
-% --- QA and answer quality datasets ---
-
-@inproceedings{maia2018fiqa,
-  title={{WWW'18} Open Challenge: Financial Opinion Mining and Question Answering},
-  author={Maia, Macedo and Handschuh, Siegfried and Freitas, Andr{\'e} and Davis, Brian and McDermott, Ross and Zarrouk, Manel and Balahur, Alexandra},
-  booktitle={Companion Proceedings of The Web Conference 2018},
-  pages={1941--1942},
-  year={2018}
-}
-
-@inproceedings{hoogeveen2015cqadupstack,
-  title={{CQADupStack}: A Benchmark Data Set for Community Question-Answering Research},
-  author={Hoogeveen, Doris and Verspoor, Karin M and Baldwin, Timothy},
-  booktitle={Proceedings of the 20th Australasian Document Computing Symposium},
-  pages={1--8},
-  year={2015}
-}
-
 % --- Summarization evaluation ---
 
 @article{fabbri2021summeval,
@@ -149,6 +138,114 @@
   volume={9},
   pages={391--409},
   year={2021}
+}
+
+% --- Cosine similarity limitations ---
+
+@inproceedings{steck2024cosine,
+  title={Is Cosine-Similarity of Embeddings Really About Similarity?},
+  author={Steck, Harald and Ekanadham, Chaitanya and Kallus, Nathan},
+  booktitle={Companion Proceedings of the ACM Web Conference 2024},
+  year={2024},
+  note={Netflix Research. arXiv:2403.05440}
+}
+
+@article{you2025semantics,
+  title={Semantics at an Angle: When Cosine Similarity Works Until It Doesn't},
+  author={You, Zifan},
+  journal={arXiv preprint arXiv:2504.16318},
+  year={2025}
+}
+
+@inproceedings{ethayarajh2019contextual,
+  title={How Contextual are Contextualized Word Representations? {C}omparing the Geometry of {BERT}, {ELMo}, and {GPT}-2 Embeddings},
+  author={Ethayarajh, Kawin},
+  booktitle={Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  pages={55--65},
+  year={2019}
+}
+
+% --- Embedding limitations ---
+
+@article{weller2025limit,
+  title={On the Theoretical Limitations of Embedding-Based Retrieval},
+  author={Weller, Orion and Boratko, Michael and others},
+  journal={arXiv preprint arXiv:2508.21038},
+  year={2025},
+  note={Google DeepMind. Introduces the LIMIT dataset}
+}
+
+% --- STS not predictive ---
+
+@inproceedings{abe2022sts,
+  title={Why is Sentence Similarity Benchmark Not Predictive of Application-Oriented Task Performance?},
+  author={Abe, Kenichi and Yokoi, Sho and Kajiwara, Tomoyuki and Inui, Kentaro},
+  booktitle={Proceedings of the 3rd Workshop on Evaluation and Comparison of NLP Systems (Eval4NLP), EMNLP 2022},
+  year={2022}
+}
+
+% --- Asymmetric representations ---
+
+@inproceedings{vilnis2015word,
+  title={Word Representations via {G}aussian Embedding},
+  author={Vilnis, Luke and McCallum, Andrew},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2015}
+}
+
+@inproceedings{vendrov2016order,
+  title={Order-Embeddings of Images and Language},
+  author={Vendrov, Ivan and Kiros, Ryan and Fidler, Sanja and Urtasun, Raquel},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2016}
+}
+
+@inproceedings{nickel2017poincare,
+  title={Poincar\'e Embeddings for Learning Hierarchical Representations},
+  author={Nickel, Maximilian and Kiela, Douwe},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2017}
+}
+
+@inproceedings{yoda2024gausscse,
+  title={{GaussCSE}: Gaussian-based Contrastive Sentence Embeddings for Textual Entailment},
+  author={Yoda, Ryuto and others},
+  booktitle={Proceedings of the 18th Conference of the European Chapter of the Association for Computational Linguistics (EACL)},
+  year={2024},
+  note={arXiv:2305.12990}
+}
+
+% --- Complementarity and compatibility ---
+
+@inproceedings{mcauley2015complementary,
+  title={Inferring Networks of Substitutable and Complementary Products},
+  author={McAuley, Julian and Pandey, Rahul and Leskovec, Jure},
+  booktitle={Proceedings of the 21st ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+  pages={785--794},
+  year={2015}
+}
+
+@article{kvernadze2022dual,
+  title={Two Is Better Than One: Dual Embeddings for Complementary Product Recommendations},
+  author={Kvernadze, George and Ruocco, Massimiliano and others},
+  journal={arXiv preprint arXiv:2211.14982},
+  year={2022}
+}
+
+% --- Benchmark critique ---
+
+@article{dehghani2021benchmark,
+  title={The Benchmark Lottery},
+  author={Dehghani, Mostafa and Tay, Yi and Gritsenko, Alexey A and Zhao, Zhe and Houlsby, Neil and Diaz, Fernando and Metzler, Donald and Vinyals, Oriol},
+  journal={arXiv preprint arXiv:2107.07002},
+  year={2021}
+}
+
+@article{pteb2025,
+  title={{PTEB}: Paraphrasing Text Embedding Benchmark},
+  author={{PTEB Authors}},
+  journal={arXiv preprint arXiv:2510.06730},
+  year={2025}
 }
 
 % --- Foundation models ---
@@ -161,17 +258,7 @@
   note={Proceedings of NAACL 2019}
 }
 
-@article{raffel2020t5,
-  title={Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer},
-  author={Raffel, Colin and Shazeer, Noam and Roberts, Adam and Lee, Katherine and Narang, Sharan and Matena, Michael and Zhou, Yanqi and Li, Wei and Liu, Peter J},
-  journal={Journal of Machine Learning Research},
-  volume={21},
-  number={140},
-  pages={1--67},
-  year={2020}
-}
-
-% --- Retrieval-augmented generation ---
+% --- RAG ---
 
 @inproceedings{lewis2020rag,
   title={Retrieval-Augmented Generation for Knowledge-Intensive {NLP} Tasks},
@@ -200,65 +287,16 @@
   year={2020}
 }
 
-@inproceedings{jiang2020complementary,
-  title={Complementary Product Recommendation},
-  author={Jiang, Jyun-Yu and Lu, Cheng-Te and Wang, Wei},
-  booktitle={Proceedings of the Web Conference 2020},
-  pages={2517--2523},
-  year={2020}
-}
+% --- Similarity vs relatedness ---
 
-% --- Evaluation methodology ---
-
-@article{dehghani2021benchmark,
-  title={The Benchmark Lottery},
-  author={Dehghani, Mostafa and Tay, Yi and Gritsenko, Alexey A and Zhao, Zhe and Houlsby, Neil and Diaz, Fernando and Metzler, Donald and Vinyals, Oriol},
-  journal={arXiv preprint arXiv:2107.07002},
-  year={2021}
-}
-
-@article{raji2021benchmarks,
-  title={{AI} and the Everything in the Whole Wide World Benchmark},
-  author={Raji, Inioluwa Deborah and Bender, Emily M and Paullada, Amandalynne and Denton, Emily and Hanna, Alex},
-  journal={arXiv preprint arXiv:2111.15366},
-  year={2021}
-}
-
-% --- Cosine similarity limitations ---
-
-@inproceedings{ethayarajh2019contextual,
-  title={How Contextual are Contextualized Word Representations? {C}omparing the Geometry of {BERT}, {ELMo}, and {GPT}-2 Embeddings},
-  author={Ethayarajh, Kawin},
-  booktitle={Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
-  pages={55--65},
-  year={2019}
-}
-
-@article{timkey2021bark,
-  title={All Bark and No Bite: Rogue Dimensions in Transformer Language Models Obscure Representational Quality},
-  author={Timkey, William and van Schijndel, Marten},
-  journal={arXiv preprint arXiv:2109.04404},
-  year={2021}
-}
-
-% --- LLM-as-judge ---
-
-@article{zheng2023judging,
-  title={Judging {LLM}-as-a-Judge with {MT}-Bench and Chatbot Arena},
-  author={Zheng, Lianmin and Chiang, Wei-Lin and Sheng, Ying and Zhuang, Siyuan and Wu, Zhanghao and Zhuang, Yonghao and Lin, Zi and Li, Zhuohan and Li, Dacheng and Xing, Eric P and others},
-  journal={Advances in Neural Information Processing Systems (NeurIPS)},
-  volume={36},
-  year={2023}
-}
-
-% --- Contrastive learning ---
-
-@inproceedings{chen2020simclr,
-  title={A Simple Framework for Contrastive Learning of Visual Representations},
-  author={Chen, Ting and Kornblith, Simon and Norber, Mohammad and Hinton, Geoffrey},
-  booktitle={Proceedings of the 37th International Conference on Machine Learning (ICML)},
-  pages={1597--1607},
-  year={2020}
+@article{hill2015simlex,
+  title={{SimLex-999}: Evaluating Semantic Models With (Genuine) Similarity Estimation},
+  author={Hill, Felix and Reichart, Roi and Korhonen, Anna},
+  journal={Computational Linguistics},
+  volume={41},
+  number={4},
+  pages={665--695},
+  year={2015}
 }
 
 % --- Knowledge distillation for embeddings ---
@@ -269,4 +307,14 @@
   booktitle={Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
   pages={4512--4525},
   year={2020}
+}
+
+% --- GloVe ---
+
+@inproceedings{pennington2014glove,
+  title={{GloVe}: Global Vectors for Word Representation},
+  author={Pennington, Jeffrey and Socher, Richard and Manning, Christopher D},
+  booktitle={Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP)},
+  pages={1532--1543},
+  year={2014}
 }

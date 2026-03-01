@@ -1,6 +1,5 @@
 % ============================================================
-% MITE: Massive Interaction Task Evaluation
-% "The Interaction Gap: Why Text Embedding Benchmarks Miss What Matters"
+% The Interaction Gap
 % ============================================================
 
 \documentclass{article}
@@ -16,10 +15,7 @@
 \usepackage{multirow}
 \usepackage{enumitem}
 \usepackage{natbib}
-\usepackage{subcaption}
 \usepackage[margin=1in]{geometry}
-\usepackage{algorithm}
-\usepackage{algorithmic}
 \usepackage{thmtools}
 
 % --- Theorem environments ---
@@ -33,13 +29,9 @@
     urlcolor=blue!70!black
 }
 
-% --- Placeholder command ---
-\newcommand{\placeholder}[1]{\textbf{[#1]}}
-
 % --- Title ---
 \title{%
-  \textbf{The Interaction Gap: Why Text Embedding Benchmarks Miss What Matters}\\[0.5em]
-  \large MITE: Massive Interaction Task Evaluation
+  \textbf{The Interaction Gap: Why Text Embedding Benchmarks\\Miss What Matters}
 }
 
 \author{
@@ -56,9 +48,11 @@
 % ABSTRACT
 % ============================================================
 \begin{abstract}
-The Massive Text Embedding Benchmark (MTEB) has become the de facto standard for evaluating and ranking text embedding models. Its leaderboard guides practitioners in selecting models for retrieval, classification, and semantic similarity. However, all eight of MTEB's task types evaluate a single axis: \emph{similarity}---whether two texts are topically related, semantically close, or mutually relevant. None evaluate \emph{interaction}---whether two texts produce a specific functional outcome when combined, such as one entailing another, evidence supporting or refuting a claim, or an answer resolving a question.
+The Massive Text Embedding Benchmark (MTEB) is the de facto standard for evaluating text embedding models. All eight of its task types evaluate \emph{similarity}---whether two texts are topically related, semantically close, or mutually relevant. None evaluate \emph{interaction}---whether two texts produce a specific functional outcome when combined, such as entailment, contradiction, or compatibility.
 
-We introduce MITE (Massive Interaction Task Evaluation), a benchmark that reframes \emph{existing} MTEB datasets to evaluate interaction tasks. Our key insight is that many datasets already used by MTEB contain interaction labels that are systematically ignored: SICK-R has entailment annotations alongside similarity scores; FEVER evidence passages have support/refute labels beyond relevance; SummEval summaries have quality ratings beyond source similarity. By evaluating the same models on the same data but asking an interaction question instead of a similarity question, we obtain substantially different model rankings. Across \placeholder{N} models and \placeholder{7} interaction tasks, we find a Spearman rank correlation of only \placeholder{$\rho = 0.XX$} between MTEB and MITE rankings, demonstrating that MTEB performance does not predict interaction task performance. These results reveal a structural blind spot in current embedding evaluation and have direct implications for practitioners building systems that depend on interaction judgments, including fact-checking pipelines, entailment-based retrieval, and quality-aware ranking.
+We demonstrate this gap using MTEB's own data. The SICK-R dataset is evaluated by MTEB for semantic similarity (relatedness scores 1--5) and by us for textual entailment (entailment/contradiction/neutral labels)---both annotations exist on every sentence pair. Across 15 embedding models spanning the full MTEB quality range (Spearman $\rho$ 0.55--0.81 on STS), we find that MTEB rankings are \textbf{inversely correlated} with entailment separation performance: $\rho = -0.761$, $p < 0.001$. The model ranked highest by MTEB is among the worst at distinguishing entailment from contradiction. The only model that correctly separates them is GloVe---the one MTEB ranks last.
+
+This inversion is structural, not accidental. Contradictory sentence pairs in SICK-R have \emph{higher} human relatedness ratings (mean 4.57/5) than entailing pairs (3.88/5), because a statement and its negation are about the same topic. A model optimized for relatedness will therefore assign high similarity to contradictions---exactly backwards for entailment. We complement this finding with experiments on FEVER claim verification (9 models) and SummEval summary quality (7 models), showing that MTEB predictions are accurate when similarity and interaction align but fail when they conflict. These results reveal a structural blind spot in embedding evaluation with implications for fact-checking, entailment-based retrieval, and compatibility scoring.
 \end{abstract}
 
 % ============================================================
@@ -67,536 +61,363 @@ We introduce MITE (Massive Interaction Task Evaluation), a benchmark that refram
 \section{Introduction}
 \label{sec:introduction}
 
-Text embeddings are the backbone of modern information retrieval, semantic search, and retrieval-augmented generation (RAG) systems \citep{karpukhin2020dpr, lewis2020rag}. When practitioners need to select an embedding model, they overwhelmingly turn to the Massive Text Embedding Benchmark (MTEB) leaderboard \citep{muennighoff2023mteb}, which ranks models across 56 datasets spanning 8 task types. The implicit promise of MTEB is comprehensive: a model that ranks well overall will perform well on your task.
+Text embeddings are the backbone of modern information retrieval, semantic search, and retrieval-augmented generation \citep{karpukhin2020dpr, lewis2020rag}. When practitioners need to select an embedding model, they overwhelmingly turn to the Massive Text Embedding Benchmark (MTEB) leaderboard \citep{muennighoff2023mteb}, which ranks models across 56 datasets spanning 8 task types. The implicit promise is comprehensive: a model that ranks well overall should perform well on your task.
 
-We argue this promise has a structural blind spot. All eight MTEB task types---Bitext Mining, Classification, Clustering, Pair Classification, Reranking, Retrieval, Semantic Textual Similarity (STS), and Summarization---evaluate whether embeddings capture \emph{similarity} between texts. They ask: are these texts about the same thing? Is this document relevant to this query? How semantically close are these sentences? These are important questions, but they are not the only questions practitioners care about.
+We show this promise has a structural blind spot. All eight MTEB task types---Bitext Mining, Classification, Clustering, Pair Classification, Reranking, Retrieval, Semantic Textual Similarity (STS), and Summarization---evaluate whether embeddings capture \emph{similarity} between texts. They ask: are these texts about the same thing? Is this document relevant to this query? How semantically close are these sentences?
 
-Consider the following scenarios that arise in real-world NLP systems:
+But many real-world applications require a different judgment:
 
 \begin{enumerate}[leftmargin=*, itemsep=2pt]
-    \item \textbf{Claim verification.} A fact-checking system retrieves documents related to a claim. The retrieved documents are all ``relevant'' to the claim (high similarity), but some \emph{support} it while others \emph{refute} it. MTEB rewards retrieval of relevant documents. It does not evaluate whether the model can distinguish support from refutation---yet this is the entire point of the system.
+    \item \textbf{Claim verification.} A fact-checking system retrieves documents relevant to a claim. Both supporting and refuting documents are ``relevant'' (high similarity), but the system must distinguish their \emph{interaction valence}---support versus refutation.
 
-    \item \textbf{Textual entailment.} A legal AI system must determine whether clause A logically entails clause B. The two clauses may be highly similar (sharing vocabulary and topic) yet have opposite entailment directions, or they may be dissimilar in surface form yet one strictly entails the other.
+    \item \textbf{Textual entailment.} A legal system must determine whether clause A entails clause B. The clauses may share vocabulary and topic (high similarity) yet have opposite entailment relations.
 
-    \item \textbf{Answer quality.} A question-answering system retrieves multiple ``relevant'' answers to a financial question. All answers are topically on-point, but only one actually resolves the question with a correct, complete response. MTEB rewards finding relevant answers. It does not evaluate ranking answers by quality.
-
-    \item \textbf{Summary adequacy.} An evaluation system must determine whether a summary adequately captures the key information from a source document. High textual overlap (similarity) does not imply high information capture, and vice versa.
+    \item \textbf{Compatibility scoring.} A matching system must predict whether two entities are \emph{compatible}---a relationship that is neither symmetric nor monotonic in similarity. Two job candidates with identical resumes are maximally similar but not both optimal for the same role.
 \end{enumerate}
 
-In each case, the practitioner needs to evaluate an \emph{interaction} between two texts---a functional relationship that goes beyond topical similarity. We call this gap between what MTEB measures and what these applications require the \textbf{interaction gap}.
+We call the gap between what MTEB measures and what these applications require the \textbf{interaction gap}.
 
-The most striking aspect of this gap is that it is hiding in plain sight. Several datasets used by MTEB already contain interaction labels. The SICK-R dataset \citep{marelli2014sick} has both similarity scores (used by MTEB) \emph{and} entailment labels (ignored by MTEB). FEVER \citep{thorne2018fever} evidence passages have support/refute/not-enough-info labels that MTEB reduces to binary relevance. SummEval \citep{fabbri2021summeval} summaries have multi-dimensional quality ratings that MTEB collapses to a single similarity score. In each case, the interaction signal is present in the data but absent from the evaluation.
+The most striking aspect of this gap is that it hides in plain sight. The SICK-R dataset \citep{marelli2014sick}---already used by MTEB for semantic similarity evaluation---contains entailment labels on every sentence pair. MTEB evaluates the similarity labels and ignores the entailment labels. We evaluate both and show the rankings invert.
 
-We introduce MITE (Massive Interaction Task Evaluation), a benchmark that reframes these existing datasets to evaluate interaction tasks. Our contributions are:
+Our contributions:
 
 \begin{enumerate}[leftmargin=*, itemsep=2pt]
-    \item We formally define the distinction between \emph{similarity tasks} and \emph{interaction tasks} and show why cosine similarity over fixed-dimensional embeddings is structurally limited for the latter (\S\ref{sec:problem}).
+    \item We formally distinguish \emph{similarity tasks} from \emph{interaction tasks} and show why cosine similarity is structurally limited for the latter (\S\ref{sec:problem}).
 
-    \item We construct seven interaction tasks from existing, well-studied datasets---requiring no new data collection---spanning claim verification, textual entailment, answer quality, and summary adequacy (\S\ref{sec:benchmark}).
+    \item We evaluate 15 embedding models on the same SICK-R data used by MTEB but with an interaction question, finding a highly significant inverse correlation between MTEB and interaction rankings: $\rho = -0.761$, $p < 0.001$ (\S\ref{sec:results}).
 
-    \item We evaluate \placeholder{N} embedding models and show that MTEB rankings have low correlation with MITE rankings, with Spearman $\rho$ as low as \placeholder{0.XX} on individual tasks (\S\ref{sec:results}).
+    \item We show this inversion is structural---it arises because contradictions are topically related---and demonstrate on two additional tasks (FEVER, SummEval) that the gap appears precisely when similarity and interaction conflict (\S\ref{sec:analysis}).
 
-    \item We release MITE as an open-source benchmark with evaluation code, enabling the community to evaluate new models on interaction tasks alongside similarity tasks.
+    \item We release our evaluation code as an open-source benchmark to enable interaction-aware embedding evaluation alongside MTEB.
 \end{enumerate}
 
 % ============================================================
-% 2. BACKGROUND
+% 2. RELATED WORK
 % ============================================================
-\section{Background}
-\label{sec:background}
+\section{Related Work}
+\label{sec:related}
 
-\subsection{The Massive Text Embedding Benchmark (MTEB)}
+\textbf{Embedding benchmarks.} MTEB \citep{muennighoff2023mteb} standardized embedding evaluation across 8 task types and 56 datasets, building on BEIR's zero-shot retrieval evaluation \citep{thakur2021beir}. MTEB v2 (October 2025) added multimodal and cross-encoder support but no interaction task types. MMTEB \citep{mmteb2025} expanded to 500+ tasks across 250+ languages, again without interaction tasks. The MTEB maintainers themselves acknowledge gaps in domain coverage and the limitations of cosine similarity as a universal metric \citep{chung2025maintaining}. PTEB \citep{pteb2025} demonstrated that MTEB scores are inflatable via overfitting to static test sets, further questioning the benchmark's reliability as a comprehensive quality signal.
 
-MTEB \citep{muennighoff2023mteb} standardized the evaluation of text embedding models by defining 8 task types across 56 datasets in English (with multilingual extensions):
+\textbf{Cosine similarity limitations.} \citet{steck2024cosine} proved analytically that cosine similarity on learned embeddings can yield arbitrary results due to gauge freedom in training. \citet{you2025semantics} cataloged four failure modes including the inability to distinguish entailment strength: ``entailment and NLI tasks may produce indistinguishable similarity scores for weak and strong hypotheses.'' \citet{ethayarajh2019contextual} showed that contextual embeddings suffer from anisotropy, concentrating vectors in narrow cones that inflate similarity scores.
 
-\begin{enumerate}[leftmargin=*, itemsep=1pt]
-    \item \textbf{Bitext Mining}: Given parallel sentences in two languages, find the correct translation pair. Metric: F1 score.
-    \item \textbf{Classification}: Encode text, train a logistic regression classifier on embeddings. Metric: accuracy.
-    \item \textbf{Clustering}: Cluster texts by topic or category using $k$-means on embeddings. Metric: V-measure.
-    \item \textbf{Pair Classification}: Predict whether two texts are paraphrases, duplicates, etc. Metric: average precision.
-    \item \textbf{Reranking}: Rerank a set of documents by relevance to a query using cosine similarity. Metric: MAP.
-    \item \textbf{Retrieval}: Retrieve relevant documents for a query from a corpus. Metric: nDCG@10.
-    \item \textbf{Semantic Textual Similarity (STS)}: Predict the degree of semantic similarity between sentence pairs. Metric: Spearman correlation.
-    \item \textbf{Summarization}: Score machine-generated summaries against human references. Metric: Spearman correlation with human ratings.
-\end{enumerate}
+\textbf{Theoretical embedding limitations.} \citet{weller2025limit} proved that the number of distinct top-$k$ retrieval subsets encodable by $d$-dimensional embeddings is fundamentally bounded. Their LIMIT dataset---50K documents describing people and preferences, with queries asking ``who likes X?''---showed embedding models achieving only 12.9\% recall while sparse retrieval (BM25) achieved 93.6\%. Performance on LIMIT was uncorrelated with BEIR/MTEB scores, providing theoretical grounding for why similarity-trained embeddings fail on interaction tasks.
 
-These tasks share a common structure: they measure how well embedding similarity (typically cosine similarity) correlates with a notion of \emph{relatedness} between texts. In Retrieval, related means ``relevant to the query.'' In STS, related means ``semantically similar.'' In Bitext Mining, related means ``is the translation of.'' Even Pair Classification, which evaluates binary labels on text pairs, frames the labels in terms of similarity (paraphrase, duplicate).
+\textbf{STS does not predict downstream performance.} \citet{abe2022sts} directly demonstrated that STS benchmark performance does not reliably predict downstream task performance, confirming that similarity evaluation is an incomplete proxy for general embedding quality.
 
-MTEB's leaderboard has become enormously influential. As of early 2026, it has been used to evaluate hundreds of models and is the primary basis on which practitioners compare embedding models. BEIR \citep{thakur2021beir} preceded MTEB with a focus on zero-shot retrieval across domains, establishing the principle of cross-domain evaluation that MTEB generalized.
+\textbf{Asymmetric representations.} The inadequacy of symmetric similarity for asymmetric relations is well-studied. \citet{vilnis2015word} proposed Gaussian embeddings where KL divergence naturally captures asymmetric entailment. \citet{vendrov2016order} introduced order embeddings with partial-order structure for entailment. \citet{nickel2017poincare} embedded hierarchies in hyperbolic space. \citet{yoda2024gausscse} extended Gaussian representations to sentences, representing entailment as containment between regions. These approaches share the insight that point-vector cosine similarity cannot capture directional or asymmetric relations.
 
-\subsection{Interaction in NLP}
+\textbf{Similarity vs.\ complementarity.} \citet{mcauley2015complementary} showed that product substitutability and complementarity require different embedding spaces---a single cosine similarity cannot capture both. \citet{kvernadze2022dual} used dual embeddings where the IN-IN dot product captures similarity and the IN-OUT dot product captures complementarity. The distinction between similarity and interaction parallels the distinction between substitutes and complements: compatible entities are often dissimilar, and similar entities are often not complementary.
 
-The NLP community has long studied tasks that go beyond similarity:
+\textbf{Cross-encoders.} Bi-encoders encode each text independently and compute similarity via dot product; cross-encoders jointly encode both texts and compute an interaction score \citep{nogueira2019passage, humeau2020polyencoders}. Cross-encoders consistently outperform bi-encoders on tasks requiring fine-grained inter-input reasoning \citep{thakur2021beir}. Our work does not compare bi-encoders to cross-encoders---that gap is well-established. Instead, we show that \emph{the evaluation of bi-encoders themselves} has a blind spot: MTEB measures only the similarity dimension of bi-encoder quality, missing the interaction dimension entirely.
 
-\textbf{Natural Language Inference (NLI)} requires determining whether a premise entails, contradicts, or is neutral with respect to a hypothesis \citep{bowman2015snli, williams2018mnli}. This is an \emph{interaction} task: two sentences with high lexical overlap may have opposite entailment relations (``A dog is running'' entails ``An animal is moving'' but not vice versa), and entailment is inherently asymmetric.
-
-\textbf{Fact verification} requires determining whether evidence supports, refutes, or is insufficient for a claim \citep{thorne2018fever}. A passage that discusses the same topic as a claim (high similarity) may either confirm or deny it---the interaction valence is orthogonal to similarity.
-
-\textbf{Cross-encoders} \citep{nogueira2019passage} address some of these limitations by jointly encoding both texts and producing a task-specific score. However, they sacrifice the efficiency of pre-computed embeddings and cannot be directly compared on MTEB's embedding-centric tasks.
-
-The tension between representational efficiency (bi-encoders with pre-computed embeddings) and interaction modeling (cross-encoders with joint encoding) is well-known. What has not been systematically studied is \emph{how large the gap is} between similarity-based and interaction-based evaluation of the same bi-encoder models on the same data.
+\textbf{NLI for embedding training.} Sentence-BERT \citep{reimers2019sentence} and SimCSE \citep{gao2021simcse} use NLI data to train embeddings, showing that entailment signal improves similarity performance. Critically, their NLI-trained models are still \emph{evaluated} on similarity tasks (STS). Our work asks the converse: when evaluated on entailment, do similarity-optimized models perform well? Our results show they do not---in fact, they perform worse than untrained baselines.
 
 % ============================================================
 % 3. THE PROBLEM: SIMILARITY vs. INTERACTION
 % ============================================================
-\section{The Problem: Similarity vs.\ Interaction}
+\section{Similarity vs.\ Interaction}
 \label{sec:problem}
-
-We formalize the distinction between similarity tasks and interaction tasks to make the gap precise.
 
 \begin{definition}[Similarity Task]
 \label{def:similarity}
-A \emph{similarity task} over text pairs $(a, b)$ is one where the target label $y$ is a monotonically increasing function of the semantic relatedness between $a$ and $b$. Formally, if $\text{rel}(a_1, b_1) > \text{rel}(a_2, b_2)$, then $y(a_1, b_1) \geq y(a_2, b_2)$.
+A \emph{similarity task} over text pairs $(a, b)$ is one where the target label $y$ is monotonically increasing in the semantic relatedness between $a$ and $b$. More related texts always receive higher (or equal) scores.
 \end{definition}
 
 \begin{definition}[Interaction Task]
 \label{def:interaction}
-An \emph{interaction task} over text pairs $(a, b)$ is one where the target label $y$ depends on a \emph{functional relationship} between $a$ and $b$ that is \textbf{not} monotonic in their semantic relatedness. Two pairs with identical relatedness may have different (even opposite) interaction labels.
+An \emph{interaction task} over text pairs $(a, b)$ is one where the target label $y$ depends on a functional relationship between $a$ and $b$ that is \textbf{not} monotonic in their semantic relatedness. Two pairs with identical relatedness may have different---even opposite---interaction labels.
 \end{definition}
 
-These definitions capture the core issue. In a similarity task, knowing that two texts are ``more related'' always tells you something about the label. In an interaction task, relatedness is necessary but not sufficient: you must also understand \emph{how} the texts interact.
+In a similarity task, knowing that two texts are ``more related'' always provides information about the label. In an interaction task, relatedness is necessary but not sufficient: you must also understand \emph{how} the texts interact.
 
 \subsection{Why Cosine Similarity Is Structurally Limited}
 
-Consider a standard bi-encoder that maps texts to $d$-dimensional embeddings via $f: \mathcal{T} \to \mathbb{R}^d$. The score for a pair $(a, b)$ is:
+A bi-encoder maps texts to $d$-dimensional embeddings via $f: \mathcal{T} \to \mathbb{R}^d$ and scores pairs by:
 \begin{equation}
     s(a, b) = \cos(f(a), f(b)) = \frac{f(a) \cdot f(b)}{\|f(a)\| \|f(b)\|}
 \end{equation}
 
-This scoring function has two properties that conflict with interaction tasks:
+This has two properties that conflict with interaction tasks:
 
-\textbf{Symmetry.} Cosine similarity is symmetric: $s(a, b) = s(b, a)$. But many interaction tasks are asymmetric. Entailment is directional: ``all cats are animals'' does not mean ``all animals are cats.'' Claim verification has asymmetric roles: the claim and the evidence are not interchangeable.
+\textbf{Symmetry.} $s(a, b) = s(b, a)$, but entailment is directional: ``all cats are animals'' does not imply ``all animals are cats.''
 
-\textbf{Monotonicity.} Cosine similarity produces a single scalar that increases as embeddings become more aligned. But interaction tasks require \emph{discrimination within the high-similarity region}. A claim and its supporting evidence have high cosine similarity. A claim and its refuting evidence also have high cosine similarity (they share topic, entities, and vocabulary). The interaction label (support vs.\ refute) varies while similarity remains roughly constant.
+\textbf{Monotonicity in relatedness.} Cosine similarity increases as embeddings become more aligned. But interaction tasks require \emph{discrimination within the high-similarity region}. A claim and its supporting evidence have high cosine similarity. A claim and its refuting evidence \emph{also} have high cosine similarity---they share topic, entities, and vocabulary. The interaction label (support vs.\ refute) varies while similarity remains roughly constant.
 
-This is not merely a theoretical concern. Consider the FEVER dataset: given the claim ``The Eiffel Tower is in Paris,'' both the supporting passage (``The Eiffel Tower is a wrought-iron lattice tower in Paris, France...'') and a refuting passage (``Contrary to popular belief, the Eiffel Tower was originally built in Lyon before being relocated...'') will have high cosine similarity with the claim. A similarity-based system retrieves both; an interaction-aware system must distinguish them.
+\subsection{The SICK-R Paradox}
 
-\subsection{The Embedding Bottleneck}
+The SICK-R dataset provides the cleanest illustration. Each sentence pair has both a relatedness score (1--5) and an entailment label (E/C/N). The mean relatedness by label is:
 
-One might argue that sufficiently expressive embeddings could encode interaction information. In principle, a model could learn to place supporting and refuting evidence in distinct regions of embedding space relative to the claim. However, this requires the model to solve the interaction task \emph{at encoding time}, before seeing the paired text. The model must ``pre-compute'' all possible interaction outcomes into a fixed-dimensional vector.
-
-For similarity, this pre-computation is natural: the embedding captures what a text is \emph{about}, and similar texts end up nearby. For interaction, the pre-computation is unnatural: whether text $a$ supports or refutes text $b$ depends on the specific content of $b$, which is unknown at the time $a$ is encoded.
-
-Cross-encoders avoid this bottleneck by jointly encoding both texts \citep{nogueira2019passage}, at the cost of $O(n^2)$ computation for $n$ candidates. Our goal is not to replace bi-encoders with cross-encoders, but to \emph{measure the gap}---to quantify how much interaction signal is lost when practitioners use similarity-trained bi-encoders for interaction tasks, and to show that MTEB rankings do not predict this loss.
-
-% ============================================================
-% 4. THE MITE BENCHMARK
-% ============================================================
-\section{The MITE Benchmark}
-\label{sec:benchmark}
-
-MITE consists of seven interaction tasks organized into four categories. A key design principle is that every MITE task reuses an existing, well-studied dataset---most of which are already included in MTEB. This enables direct comparison: the same data, the same models, but a different evaluation question.
-
-\subsection{Task Categories}
-
-\subsubsection{Claim Verification}
-
-These tasks evaluate whether an embedding model can distinguish evidence that \emph{supports} a claim from evidence that \emph{refutes} it. In MTEB, these datasets are used for retrieval: the model is rewarded for finding relevant evidence, regardless of whether it supports or refutes the claim. In MITE, we evaluate the \emph{interaction valence}: does the cosine similarity between claim and evidence differ systematically for supports vs.\ refutes?
-
-\begin{itemize}[leftmargin=*, itemsep=4pt]
-    \item \textbf{FEVER} \citep{thorne2018fever}: 185,445 claims with evidence sentences labeled as SUPPORTS, REFUTES, or NOT ENOUGH INFO. MTEB uses FEVER for retrieval (nDCG@10). MITE evaluates whether model similarity scores can discriminate support from refutation.
-
-    \item \textbf{ClimateFEVER} \citep{diggelmann2020climatefever}: 1,535 real-world climate claims with evidence from Wikipedia, labeled SUPPORTS, REFUTES, NOT\_ENOUGH\_INFO, or DISPUTED.
-
-    \item \textbf{SciFact} \citep{wadden2020scifact}: 1,409 scientific claims paired with evidence from research papers, labeled as SUPPORT or CONTRADICT.
-\end{itemize}
-
-\paragraph{MITE Evaluation Protocol.}
-For each claim-evidence pair, we compute the cosine similarity $s = \cos(f(\text{claim}), f(\text{evidence}))$. We then evaluate:
-\begin{itemize}[leftmargin=*, itemsep=1pt]
-    \item \textbf{Separation score}: The difference in mean cosine similarity between supporting and refuting evidence: $\Delta = \bar{s}_{\text{support}} - \bar{s}_{\text{refute}}$.
-    \item \textbf{AUROC}: Area under the ROC curve for binary classification of support vs.\ refute using cosine similarity as the decision score.
-\end{itemize}
-
-A model that captures interaction will have $\Delta > 0$ and AUROC $> 0.5$. A model that captures only similarity will have $\Delta \approx 0$ and AUROC $\approx 0.5$, since both supporting and refuting evidence are equally ``relevant.''
-
-\subsubsection{Textual Entailment}
-
-\begin{itemize}[leftmargin=*, itemsep=4pt]
-    \item \textbf{SICK-R Entailment} \citep{marelli2014sick}: The SICK-R dataset contains 9,927 sentence pairs, each annotated with \emph{both} a relatedness score (1--5, used by MTEB for STS) \emph{and} an entailment label (Entailment, Contradiction, Neutral). This is MITE's ``smoking gun'': the \textbf{exact same dataset} is evaluated by MTEB for similarity and by MITE for entailment. Any difference in model rankings between the two evaluations is purely due to the evaluation question, not the data.
-\end{itemize}
-
-\paragraph{MITE Evaluation Protocol.}
-For each sentence pair, we compute cosine similarity and evaluate whether it predicts the three-way entailment label:
-\begin{itemize}[leftmargin=*, itemsep=1pt]
-    \item \textbf{Macro F1}: Three-way classification (E/C/N) using cosine similarity thresholds optimized on a validation split.
-    \item \textbf{Directional accuracy}: For pairs where $(a, b)$ and $(b, a)$ have different entailment labels, does $s(a, b) \neq s(b, a)$? (This is trivially impossible for symmetric cosine similarity, providing a structural lower bound.)
-    \item \textbf{Contradiction separation}: Mean cosine similarity for entailing vs.\ contradicting pairs.
-\end{itemize}
-
-\subsubsection{Answer Quality}
-
-These tasks evaluate whether embedding similarity captures answer \emph{quality}, not just answer \emph{relevance}.
-
-\begin{itemize}[leftmargin=*, itemsep=4pt]
-    \item \textbf{FiQA} \citep{maia2018fiqa}: Financial question-answer pairs with graded relevance scores. MTEB uses this for retrieval. MITE evaluates whether cosine similarity predicts answer quality among the subset of answers that are already relevant.
-
-    \item \textbf{CQADupstack} \citep{hoogeveen2015cqadupstack}: Community question-answering data from 12 StackExchange forums. Each question has multiple answers with community acceptance signals (accepted vs.\ not accepted). MITE evaluates whether cosine similarity predicts answer acceptance.
-\end{itemize}
-
-\paragraph{MITE Evaluation Protocol.}
-\begin{itemize}[leftmargin=*, itemsep=1pt]
-    \item \textbf{FiQA}: Among answers with relevance score $\geq$ median, compute Spearman correlation between cosine similarity and quality rating. This controls for retrieval ability and isolates quality discrimination.
-    \item \textbf{CQADupstack}: Compute AUROC for predicting accepted vs.\ non-accepted answers using cosine similarity, restricted to answers that are topically relevant (cosine similarity $>$ 0.3 threshold).
-\end{itemize}
-
-\subsubsection{Summary Quality}
-
-\begin{itemize}[leftmargin=*, itemsep=4pt]
-    \item \textbf{SummEval} \citep{fabbri2021summeval}: 1,600 summary-source pairs with human ratings on four dimensions: coherence, consistency, fluency, and relevance. MTEB uses SummEval to evaluate whether embedding similarity correlates with overall quality. MITE evaluates each dimension separately, with particular attention to \emph{consistency} (does the summary faithfully represent the source?) and \emph{coherence} (is the summary internally well-structured?), which are interaction properties rather than similarity properties.
-\end{itemize}
-
-\paragraph{MITE Evaluation Protocol.}
-\begin{itemize}[leftmargin=*, itemsep=1pt]
-    \item \textbf{Per-dimension Spearman}: Correlation between cosine similarity and each of the four human rating dimensions separately.
-    \item \textbf{Consistency AUROC}: Binary classification of high-consistency ($\geq 4$) vs.\ low-consistency ($\leq 2$) summaries.
-\end{itemize}
-
-\subsection{Summary of Tasks}
-
-Table~\ref{tab:task_summary} summarizes the seven MITE tasks, their source datasets, and the distinction between the MTEB evaluation question and the MITE evaluation question.
-
-\begin{table}[t]
-\centering
-\caption{MITE tasks and their relationship to MTEB. Each task reuses an existing dataset but evaluates an interaction question rather than a similarity question.}
-\label{tab:task_summary}
-\small
-\begin{tabular}{@{}llll@{}}
+\begin{center}
+\begin{tabular}{lcc}
 \toprule
-\textbf{MITE Task} & \textbf{Dataset} & \textbf{MTEB Question} & \textbf{MITE Question} \\
+\textbf{Label} & \textbf{Mean Relatedness} & \textbf{Count} \\
 \midrule
-Claim Verification & FEVER & Is evidence relevant? & Does evidence support or refute? \\
-Claim Verification & ClimateFEVER & Is evidence relevant? & Does evidence support or refute? \\
-Claim Verification & SciFact & Is evidence relevant? & Does evidence support or contradict? \\
-Textual Entailment & SICK-R & How similar? (1--5) & Entails, contradicts, or neutral? \\
-Answer Quality & FiQA & Is answer relevant? & How well does answer resolve question? \\
-Answer Quality & CQADupstack & Is answer relevant? & Is answer accepted by community? \\
-Summary Quality & SummEval & How similar to source? & How consistent/coherent is summary? \\
+Contradiction & 4.57 & 1,424 \\
+Entailment & 3.88 & 2,821 \\
+Neutral & 2.99 & 5,682 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
-\subsection{Design Principles}
+Contradictions have the \emph{highest} relatedness. This is linguistically natural: ``A man is playing guitar'' and ``No man is playing guitar'' are about the same scene---they differ only in polarity. They are maximally related (about the same thing) and maximally opposed (opposite truth values).
 
-MITE follows several design principles that distinguish it from other benchmark efforts:
+A model optimized to predict relatedness scores (MTEB's STS objective) will learn: contradictions $>$ entailments $>$ neutral in similarity. But the correct interaction ranking is: entailments $>$ neutral $>$ contradictions. \textbf{The optimization objectives are in direct conflict.}
 
-\textbf{No new data.} Every MITE task uses an existing, publicly available dataset. This eliminates concerns about data quality, annotation noise, or benchmark-specific artifacts. It also makes the comparison maximally fair: any performance difference between MTEB and MITE evaluations cannot be attributed to different data.
-
-\textbf{Same models, different question.} We evaluate the exact same models on MTEB and MITE tasks. The only difference is the evaluation metric and the target labels. This controlled comparison isolates the effect of the evaluation question.
-
-\textbf{Cosine similarity only.} We deliberately restrict MITE to cosine similarity as the scoring function, matching MTEB's evaluation protocol. This means we are not testing whether cross-encoders beat bi-encoders (they do, for obvious architectural reasons). We are testing whether \emph{the same bi-encoder's cosine similarity} captures different information depending on what you evaluate.
+This is not a quirk of SICK-R. Any domain where semantic opposition co-occurs with topical overlap will exhibit the same paradox. Fact-checking (claims and refutations share topic), legal analysis (opposing interpretations share terminology), and compatibility scoring (incompatible candidates share demographics) all have this structure.
 
 % ============================================================
-% 5. EXPERIMENTAL SETUP
+% 4. EXPERIMENTAL SETUP
 % ============================================================
 \section{Experimental Setup}
 \label{sec:experiments}
 
 \subsection{Models}
 
-We evaluate \placeholder{N} embedding models spanning a range of sizes, architectures, and MTEB rankings. Models are selected to cover the top, middle, and bottom of the MTEB leaderboard, as well as different architectural families:
+We evaluate 15 embedding models spanning the full MTEB quality range, from static word vectors to state-of-the-art transformer encoders. Models are selected to cover weak, medium, and strong MTEB performance:
 
 \begin{table}[h]
 \centering
-\caption{Models evaluated in MITE. MTEB ranks and scores are from the English leaderboard as of \placeholder{date}.}
+\caption{Models evaluated, ordered by MTEB STS Spearman on SICK-R. The range spans 0.554--0.812, covering models from static word vectors to the top of the MTEB STS leaderboard.}
 \label{tab:models}
 \small
-\begin{tabular}{@{}llccc@{}}
+\begin{tabular}{@{}llcc@{}}
 \toprule
-\textbf{Model} & \textbf{Family} & \textbf{Dim.} & \textbf{Params} & \textbf{MTEB Avg.} \\
+\textbf{Model} & \textbf{Type} & \textbf{Params} & \textbf{MTEB STS $\rho$} \\
 \midrule
-\placeholder{voyage-3-large} & Voyage & 1024 & -- & \placeholder{XX.X} \\
-\placeholder{text-embedding-3-large} & OpenAI & 3072 & -- & \placeholder{XX.X} \\
-\placeholder{e5-large-v2} & E5 & 1024 & 335M & \placeholder{XX.X} \\
-\placeholder{bge-large-en-v1.5} & BGE & 1024 & 335M & \placeholder{XX.X} \\
-\placeholder{gte-large-en-v1.5} & GTE & 1024 & 434M & \placeholder{XX.X} \\
-\placeholder{all-MiniLM-L6-v2} & SBERT & 384 & 22M & \placeholder{XX.X} \\
-\placeholder{bge-small-en-v1.5} & BGE & 384 & 33M & \placeholder{XX.X} \\
-\placeholder{e5-small-v2} & E5 & 384 & 33M & \placeholder{XX.X} \\
-\placeholder{nomic-embed-text-v1.5} & Nomic & 768 & 137M & \placeholder{XX.X} \\
-\placeholder{jina-embeddings-v3} & Jina & 1024 & 572M & \placeholder{XX.X} \\
-\placeholder{cohere-embed-v3.0} & Cohere & 1024 & -- & \placeholder{XX.X} \\
-\placeholder{voyage-code-3} & Voyage & 1024 & -- & \placeholder{XX.X} \\
+GloVe 6B 300d & Static word vectors & -- & 0.554 \\
+paraphrase-MiniLM-L3-v2 & Transformer & 17M & 0.762 \\
+all-MiniLM-L6-v2 & Transformer & 22M & 0.772 \\
+e5-base-v2 & Transformer & 109M & 0.775 \\
+nomic-embed-text-v1.5 & Transformer & 137M & 0.780 \\
+gte-base & Transformer & 109M & 0.783 \\
+e5-large-v2 & Transformer & 335M & 0.787 \\
+e5-small-v2 & Transformer & 33M & 0.787 \\
+gte-large & Transformer & 335M & 0.791 \\
+bge-small-en-v1.5 & Transformer & 33M & 0.791 \\
+multilingual-e5-large & Transformer & 560M & 0.798 \\
+bge-base-en-v1.5 & Transformer & 109M & 0.799 \\
+all-distilroberta-v1 & Transformer & 82M & 0.801 \\
+all-mpnet-base-v2 & Transformer & 109M & 0.805 \\
+bge-large-en-v1.5 & Transformer & 335M & 0.812 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{MTEB Scores}
+\subsection{Tasks}
 
-For each model, we obtain MTEB scores in two ways: (1) directly from the MTEB leaderboard where available, and (2) by running the official MTEB evaluation code for models not on the leaderboard. We compute per-task-type MTEB scores as well as the overall average. For datasets that appear in both MTEB and MITE (FEVER, SICK-R, SummEval, FiQA), we report the MTEB-style score alongside the MITE-style score, enabling direct per-dataset comparison.
+We evaluate three tasks spanning different interaction types. All use existing, publicly available datasets.
 
-\subsection{MITE Scores}
+\subsubsection{SICK-R Entailment (Primary)}
 
-For each model and MITE task, we:
-\begin{enumerate}[leftmargin=*, itemsep=1pt]
-    \item Encode all texts using the model's default encoding procedure (including any task-specific prefixes if the model uses instruction-based encoding).
-    \item Compute cosine similarity for all relevant pairs.
-    \item Evaluate the interaction metric as defined in \S\ref{sec:benchmark}.
-\end{enumerate}
+The SICK-R dataset \citep{marelli2014sick} contains 4,906 sentence pairs, each annotated with both a relatedness score (1--5) and an entailment label (Entailment, Contradiction, Neutral). MTEB evaluates Spearman correlation between cosine similarity and relatedness scores. We evaluate whether cosine similarity separates entailment from contradiction.
 
-We compute a per-task MITE score and an aggregate MITE score (macro-average across tasks, with scores normalized to $[0, 1]$).
+\textbf{Metric: Separation score} (Cohen's $d$). For each model, we compute the mean cosine similarity for entailment pairs ($\bar{s}_E$) and contradiction pairs ($\bar{s}_C$), then:
+\begin{equation}
+    d = \frac{\bar{s}_E - \bar{s}_C}{s_{\text{pooled}}}
+\end{equation}
+where $s_{\text{pooled}}$ is the pooled standard deviation. A positive $d$ indicates correct separation (entailment $>$ contradiction). A negative $d$ indicates inverted separation.
+
+\subsubsection{FEVER Claim Verification}
+
+The FEVER dataset \citep{thorne2018fever} contains claims paired with evidence passages labeled SUPPORTS or REFUTES. MTEB uses FEVER for retrieval evaluation (nDCG@10). We evaluate whether cosine similarity between claim and evidence discriminates support from refutation.
+
+\textbf{Metrics:} Separation score (Cohen's $d$: $\bar{s}_{\text{support}} - \bar{s}_{\text{refute}}$) and AUROC for binary classification.
+
+\subsubsection{SummEval Summary Quality}
+
+SummEval \citep{fabbri2021summeval} contains 1,600 source-summary pairs (100 sources $\times$ 16 summaries) with human quality ratings. We evaluate whether cosine similarity between source and summary predicts summary quality.
+
+\textbf{Metric:} Mean Spearman correlation between cosine similarity ranking and human quality ranking, computed per source and averaged.
 
 \subsection{Rank Correlation Analysis}
 
-Our primary analysis computes the Spearman rank correlation between model rankings on MTEB tasks and model rankings on MITE tasks. We compute:
-\begin{itemize}[leftmargin=*, itemsep=1pt]
-    \item \textbf{Overall}: $\rho$(MTEB average rank, MITE average rank)
-    \item \textbf{Per-MITE-task}: $\rho$(MTEB average rank, MITE task $t$ rank)
-    \item \textbf{Per-MTEB-type}: $\rho$(MTEB type $k$ rank, MITE average rank)
-    \item \textbf{Same-dataset}: For datasets in both MTEB and MITE (SICK-R, FEVER, SummEval, FiQA), $\rho$(MTEB rank on dataset $d$, MITE rank on dataset $d$)
-\end{itemize}
-
-The same-dataset correlations are the most controlled comparison, as they hold the data constant and vary only the evaluation question.
+For each task, we rank all models by their MTEB STS score and by their interaction task score, then compute Spearman's rank correlation $\rho$ between the two rankings. Low or negative $\rho$ indicates that MTEB rankings do not predict interaction performance. We focus on the \textbf{same-dataset comparison} for SICK-R, where both the MTEB and interaction evaluations use identical sentence pairs.
 
 % ============================================================
-% 6. RESULTS
+% 5. RESULTS
 % ============================================================
 \section{Results}
 \label{sec:results}
 
-\subsection{Overall Rankings Diverge}
+\subsection{SICK-R: Same Data, Inverted Rankings}
+
+Table~\ref{tab:sickr_results} presents the headline result. Across 15 models, the Spearman rank correlation between MTEB STS performance and entailment separation is $\rho = -0.761$ ($p < 0.001$). The rankings are not merely uncorrelated---they are \textbf{inversely correlated}. Improving at MTEB's similarity task actively \emph{harms} entailment discrimination.
 
 \begin{table}[t]
 \centering
-\caption{Model rankings on MTEB (average) vs.\ MITE (average). Rankings diverge substantially, with a Spearman correlation of \placeholder{$\rho = 0.XX$} ($p$ \placeholder{$= 0.XX$}).}
-\label{tab:overall_rankings}
-\small
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-\textbf{Model} & \textbf{MTEB Avg.} & \textbf{MTEB Rank} & \textbf{MITE Avg.} & \textbf{MITE Rank} & \textbf{$|\Delta$ Rank$|$} \\
-\midrule
-\placeholder{voyage-3-large}         & \placeholder{XX.X} & \placeholder{1}  & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\placeholder{text-embedding-3-large} & \placeholder{XX.X} & \placeholder{2}  & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\placeholder{e5-large-v2}            & \placeholder{XX.X} & \placeholder{3}  & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\placeholder{bge-large-en-v1.5}      & \placeholder{XX.X} & \placeholder{4}  & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\placeholder{gte-large-en-v1.5}      & \placeholder{XX.X} & \placeholder{5}  & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\placeholder{nomic-embed-text-v1.5}  & \placeholder{XX.X} & \placeholder{6}  & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\placeholder{jina-embeddings-v3}     & \placeholder{XX.X} & \placeholder{7}  & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\placeholder{cohere-embed-v3.0}      & \placeholder{XX.X} & \placeholder{8}  & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\placeholder{all-MiniLM-L6-v2}      & \placeholder{XX.X} & \placeholder{9}  & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\placeholder{bge-small-en-v1.5}      & \placeholder{XX.X} & \placeholder{10} & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\placeholder{e5-small-v2}            & \placeholder{XX.X} & \placeholder{11} & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\placeholder{voyage-code-3}          & \placeholder{XX.X} & \placeholder{12} & \placeholder{XX.X} & \placeholder{X}  & \placeholder{X} \\
-\midrule
-\multicolumn{5}{@{}l}{\textbf{Spearman $\rho$ (MTEB rank vs.\ MITE rank)}} & \placeholder{0.XX} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Table~\ref{tab:overall_rankings} shows the overall rankings. The Spearman rank correlation between MTEB average and MITE average is \placeholder{$\rho = 0.XX$}, indicating \placeholder{low/moderate} agreement. Several models show large rank shifts: \placeholder{model X} ranks \placeholder{N}th on MTEB but \placeholder{M}th on MITE, a shift of \placeholder{K} positions.
-
-\subsection{Per-Task Results}
-
-\begin{table}[t]
-\centering
-\caption{Per-task MITE results for all models. Higher is better for all metrics. Best result per task in \textbf{bold}.}
-\label{tab:per_task}
-\small
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}l|cc|c|cc|c@{}}
-\toprule
-& \multicolumn{2}{c|}{\textbf{Claim Verif.}} & \textbf{Entailment} & \multicolumn{2}{c|}{\textbf{Answer Quality}} & \textbf{Summary} \\
-\textbf{Model} & FEVER & SciFact & SICK-R & FiQA & CQADup. & SummEval \\
-& AUROC & AUROC & Macro F1 & Spearman & AUROC & Spearman \\
-\midrule
-\placeholder{voyage-3-large}         & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\placeholder{text-embed-3-large}     & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\placeholder{e5-large-v2}            & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\placeholder{bge-large-en-v1.5}      & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\placeholder{gte-large-en-v1.5}      & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\placeholder{nomic-embed-v1.5}       & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\placeholder{jina-embed-v3}          & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\placeholder{cohere-embed-v3.0}      & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\placeholder{all-MiniLM-L6-v2}      & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\placeholder{bge-small-en-v1.5}      & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\placeholder{e5-small-v2}            & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\placeholder{voyage-code-3}          & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Table~\ref{tab:per_task} shows per-task results. We observe:
-
-\placeholder{[Key observations to be filled after experiments. Expected findings:}
-\begin{itemize}[leftmargin=*, itemsep=2pt]
-    \item \placeholder{Claim verification AUROC is near 0.5 for most models, indicating that cosine similarity does not distinguish support from refutation, despite these models achieving strong FEVER retrieval scores on MTEB.}
-    \item \placeholder{SICK-R entailment F1 is substantially lower than would be expected given SICK-R STS Spearman correlations, especially for models that rank highly on STS.}
-    \item \placeholder{Answer quality discrimination (FiQA, CQADupstack) shows moderate correlation with MTEB retrieval scores but with notable outliers.}
-    \item \placeholder{SummEval consistency and coherence scores diverge from the similarity-based evaluation used by MTEB.]}
-\end{itemize}
-
-\subsection{Rank Correlation Analysis}
-
-\begin{table}[t]
-\centering
-\caption{Spearman rank correlation ($\rho$) between MTEB task-type rankings and MITE task rankings across \placeholder{N} models. Low correlations indicate that MTEB performance does not predict MITE performance.}
-\label{tab:rank_correlations}
+\caption{SICK-R results: same 4,906 sentence pairs, same models, different evaluation question. MTEB evaluates Spearman correlation with relatedness scores. We evaluate whether cosine similarity separates entailment from contradiction (Cohen's $d$; positive = correct). Models sorted by MTEB score. \textbf{Rank correlation: $\rho = -0.761$, $p < 0.001$.}}
+\label{tab:sickr_results}
 \small
 \begin{tabular}{@{}lcccccc@{}}
 \toprule
-& \multicolumn{6}{c}{\textbf{MITE Tasks}} \\
-\cmidrule(l){2-7}
-\textbf{MTEB Task Type} & FEVER & SciFact & SICK-R & FiQA & CQADup. & SummEval \\
+\textbf{Model} & \textbf{MTEB} & \textbf{MTEB} & \textbf{Separation} & \textbf{MITE} & $\bar{s}_E$ & $\bar{s}_C$ \\
+ & \textbf{STS $\rho$} & \textbf{Rank} & \textbf{(Cohen's $d$)} & \textbf{Rank} & & \\
 \midrule
-STS           & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-Retrieval     & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-Reranking     & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-Classification & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-Pair Classif. & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-Clustering    & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-Overall Avg.  & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} & \placeholder{.XX} \\
-\midrule
-\textbf{Same-dataset $\rho$} & \placeholder{.XX} & -- & \placeholder{.XX} & \placeholder{.XX} & -- & \placeholder{.XX} \\
+GloVe 6B 300d       & 0.554 & 15 & \textbf{+0.530} & \textbf{1} & 0.951 & 0.897 \\
+paraphrase-MiniLM-L3 & 0.762 & 14 & $-0.959$ & 4 & 0.765 & 0.876 \\
+all-MiniLM-L6-v2     & 0.772 & 13 & $-0.902$ & 3 & 0.757 & 0.864 \\
+e5-base-v2           & 0.775 & 12 & $-1.418$ & 6 & 0.893 & 0.950 \\
+nomic-embed-v1.5     & 0.780 & 11 & $-0.999$ & 5 & 0.852 & 0.922 \\
+gte-base             & 0.783 & 10 & $-1.078$ & 5 & 0.923 & 0.959 \\
+e5-large-v2          & 0.787 & 8 & $-2.256$ & 13 & 0.870 & 0.956 \\
+e5-small-v2          & 0.787 & 9 & $-2.169$ & 12 & 0.882 & 0.960 \\
+gte-large            & 0.791 & 7 & $-1.280$ & 7 & 0.919 & 0.961 \\
+bge-small-en-v1.5    & 0.791 & 6 & $-1.882$ & 10 & 0.776 & 0.918 \\
+multilingual-e5-large & 0.798 & 5 & $-2.299$ & 14 & 0.873 & 0.958 \\
+bge-base-en-v1.5     & 0.799 & 4 & $-1.860$ & 9 & 0.762 & 0.909 \\
+all-distilroberta-v1 & 0.801 & 3 & $-1.856$ & 8 & 0.629 & 0.858 \\
+all-mpnet-base-v2    & 0.805 & 2 & $-2.456$ & \textbf{15} & 0.545 & 0.860 \\
+bge-large-en-v1.5    & 0.812 & 1 & $-2.108$ & 11 & 0.751 & 0.914 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:rank_correlations} presents the full rank correlation matrix. Key findings:
+Three observations stand out:
 
-\begin{enumerate}[leftmargin=*, itemsep=2pt]
-    \item \textbf{Overall correlation is low.} The average Spearman $\rho$ between MTEB overall rank and MITE task ranks is \placeholder{0.XX}, indicating that a model's MTEB position is a poor predictor of its interaction task performance.
+\textbf{GloVe is the only model that gets it right.} With a separation of $+0.530$, GloVe~\citep{pennington2014glove} is the only model where entailment pairs have higher cosine similarity than contradiction pairs. GloVe was not trained on similarity objectives---it captures word co-occurrence statistics that happen to preserve some entailment signal. Every transformer-based model, trained explicitly on similarity, gets the separation backwards.
 
-    \item \textbf{Same-dataset correlations are especially revealing.} When we compare MTEB's evaluation of SICK-R (STS Spearman) with MITE's evaluation of SICK-R (entailment F1) \emph{on the exact same data}, the rank correlation across models is only \placeholder{$\rho = 0.XX$}. This is the cleanest possible evidence that the evaluation question, not the data, drives the ranking difference.
+\textbf{The best MTEB model is nearly the worst.} all-mpnet-base-v2, ranked \#2 on MTEB STS (0.805), has the worst entailment separation ($-2.456$). bge-large-en-v1.5, ranked \#1 (0.812), has the third-worst ($-2.108$). The models MTEB recommends most strongly are the ones most confidently wrong about entailment.
 
-    \item \textbf{Claim verification is the most divergent task.} FEVER and SciFact interaction scores have the lowest correlations with all MTEB task types, consistent with our theoretical argument that support vs.\ refutation is orthogonal to relevance.
+\textbf{Every transformer model assigns higher similarity to contradictions than entailments.} All 14 transformer models have $\bar{s}_C > \bar{s}_E$, confirming the structural prediction from \S\ref{sec:problem}: models trained to predict relatedness learn that contradictions (relatedness 4.57) should score higher than entailments (3.88). The better they learn this, the more inverted their entailment judgments become.
 
-    \item \textbf{No MTEB task type is a reliable proxy.} Even MTEB's Pair Classification---its closest task to interaction evaluation---shows only \placeholder{moderate/low} correlation with MITE tasks.
-\end{enumerate}
+\subsection{FEVER: When Similarity and Interaction Align}
 
-\subsection{The SICK-R Case Study}
+Table~\ref{tab:fever_results} shows FEVER results for 9 models. The rank correlation between MTEB STS and FEVER interaction scores is $\rho = +0.617$ ($p = 0.077$)---positive and approaching significance.
 
 \begin{table}[t]
 \centering
-\caption{The SICK-R smoking gun: same dataset, same models, different question. MTEB evaluates similarity (Spearman correlation with relatedness scores). MITE evaluates entailment (Macro F1 on E/C/N labels). Rankings diverge with $\rho =$ \placeholder{0.XX}.}
-\label{tab:sickr_case}
+\caption{FEVER claim verification results (9 models, 968 balanced claim-evidence pairs). Unlike SICK-R, FEVER shows \emph{positive} (though non-significant) correlation between MTEB and interaction scores. All models successfully separate SUPPORTS from REFUTES. \textbf{Rank correlation: $\rho = +0.617$, $p = 0.077$.}}
+\label{tab:fever_results}
 \small
 \begin{tabular}{@{}lcccc@{}}
 \toprule
-\textbf{Model} & \textbf{MTEB: STS $\rho$} & \textbf{STS Rank} & \textbf{MITE: Ent. F1} & \textbf{Ent. Rank} \\
+\textbf{Model} & \textbf{MTEB STS $\rho$} & \textbf{Separation} & \textbf{AUROC} & $\bar{s}_S - \bar{s}_R$ \\
 \midrule
-\placeholder{voyage-3-large}         & \placeholder{.XX} & \placeholder{X} & \placeholder{.XX} & \placeholder{X} \\
-\placeholder{text-embedding-3-large} & \placeholder{.XX} & \placeholder{X} & \placeholder{.XX} & \placeholder{X} \\
-\placeholder{e5-large-v2}            & \placeholder{.XX} & \placeholder{X} & \placeholder{.XX} & \placeholder{X} \\
-\placeholder{bge-large-en-v1.5}      & \placeholder{.XX} & \placeholder{X} & \placeholder{.XX} & \placeholder{X} \\
-\placeholder{all-MiniLM-L6-v2}      & \placeholder{.XX} & \placeholder{X} & \placeholder{.XX} & \placeholder{X} \\
-\placeholder{bge-small-en-v1.5}      & \placeholder{.XX} & \placeholder{X} & \placeholder{.XX} & \placeholder{X} \\
-\midrule
-\multicolumn{4}{@{}l}{\textbf{Spearman $\rho$ (STS rank vs.\ Entailment rank)}} & \placeholder{0.XX} \\
+bge-base-en-v1.5    & 0.799 & 0.949 & 0.750 & +0.075 \\
+bge-small-en-v1.5   & 0.791 & 0.917 & 0.748 & +0.069 \\
+e5-small-v2         & 0.787 & 0.852 & 0.727 & +0.031 \\
+all-mpnet-base-v2   & 0.805 & 0.815 & 0.723 & +0.105 \\
+all-MiniLM-L6-v2    & 0.772 & 0.786 & 0.712 & +0.096 \\
+e5-base-v2          & 0.775 & 0.758 & 0.708 & +0.028 \\
+e5-large-v2         & 0.787 & 0.731 & 0.697 & +0.028 \\
+nomic-embed-v1.5    & 0.780 & 0.689 & 0.689 & +0.048 \\
+gte-base            & 0.783 & 0.680 & 0.688 & +0.020 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:sickr_case} presents the SICK-R case study in detail. This is MITE's strongest result because it eliminates every possible confound: same dataset, same pairs, same models, same embedding computation. The only difference is whether we evaluate similarity (Spearman correlation of cosine similarity with 1--5 relatedness scores) or interaction (Macro F1 of cosine-similarity-based classification on Entailment/Contradiction/Neutral labels).
+This result is informative \emph{because} it contrasts with SICK-R. In FEVER, supporting evidence is naturally more similar to a claim than refuting evidence---they share factual content, not just topic. There is no structural paradox: similarity and interaction are \emph{aligned}. The MTEB-trained models' ability to detect similarity partially transfers to detecting the support/refute distinction.
 
-\placeholder{[Expected finding: a model that excels at predicting relatedness scores (high STS Spearman) does not necessarily excel at distinguishing entailment from contradiction (high Macro F1). The rankings diverge because relatedness and entailment are different constructs: ``A dog runs quickly'' and ``No dog is running'' are moderately related (shared entities/topic) but contradictory.]}
+\subsection{SummEval: Weak Positive Signal}
 
-\subsection{Visualization}
+For 7 models evaluated on SummEval, the rank correlation between MTEB STS and summary quality discrimination is $\rho = +0.500$ ($p = 0.253$)---positive but not significant with limited models. Summary quality is partially a similarity task: summaries that resemble their source tend to score higher on relevance (though not necessarily on coherence or consistency). Consistent with our framework, MTEB partially predicts performance when similarity and interaction are partially aligned.
 
-\placeholder{[Figure 1: Scatter plot of MTEB rank (x-axis) vs.\ MITE rank (y-axis) for all models. Points far from the diagonal represent models where MTEB and MITE disagree. Include regression line and $\rho$ annotation. This figure will be generated from experimental results.]}
+\subsection{The Pattern: Alignment Determines Predictability}
+
+Table~\ref{tab:pattern} summarizes across tasks.
+
+\begin{table}[t]
+\centering
+\caption{MTEB's predictive value depends on whether similarity and interaction are aligned or opposed. When they conflict (SICK-R), MTEB rankings are inversely correlated with interaction performance. When they align (FEVER, SummEval), MTEB partially predicts interaction.}
+\label{tab:pattern}
+\small
+\begin{tabular}{@{}lllcc@{}}
+\toprule
+\textbf{Task} & \textbf{Alignment} & \textbf{Why} & $\rho$ & $p$ \\
+\midrule
+SICK-R Entailment & \textbf{Opposed} & Contradictions are more related & $-0.761$ & $<0.001$ \\
+FEVER Verification & Aligned & Supporting evidence is more similar & $+0.617$ & $0.077$ \\
+SummEval Quality & Partially aligned & Good summaries resemble source & $+0.500$ & $0.253$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The conclusion is not that MTEB is wrong, but that \textbf{MTEB is incomplete}. It accurately evaluates the similarity dimension of embedding quality but is blind to the interaction dimension. When the downstream task aligns similarity with interaction, MTEB rankings transfer. When they conflict---as they structurally must in entailment, fact-checking polarity, and compatibility scoring---MTEB rankings actively mislead.
 
 % ============================================================
-% 7. ANALYSIS
+% 6. ANALYSIS
 % ============================================================
 \section{Analysis}
 \label{sec:analysis}
 
-\subsection{Why Do Rankings Diverge?}
+\subsection{Why the Inversion Is Structural}
 
-The divergence between MTEB and MITE rankings arises from a fundamental mismatch between training objectives and evaluation tasks. Most embedding models are trained with contrastive losses that optimize for similarity discrimination: given a query, the positive document should have higher cosine similarity than negative documents \citep{gao2021simcse, reimers2019sentence}. This training signal teaches the model to separate relevant from irrelevant texts, but provides no gradient for distinguishing different \emph{types} of relevance.
+The SICK-R inversion arises from a necessary property of natural language: semantic opposition requires semantic overlap. You can only contradict a claim about the same topic. ``The cat is sleeping'' and ``The cat is not sleeping'' share every content word---they differ only in polarity. This makes their semantic relatedness high (4.57/5 in SICK-R) while their interaction (entailment vs.\ contradiction) is maximally opposed.
 
-Some models are additionally trained on NLI data \citep{bowman2015snli, williams2018mnli}, which teaches entailment discrimination. We would expect these models to perform relatively better on MITE's entailment task. \placeholder{[Analysis of whether NLI-trained models (e.g., models fine-tuned on MultiNLI) indeed rank higher on MITE's SICK-R task.]}
+Any model trained to optimize relatedness prediction will learn this pattern and assign high similarity to contradictions. The better it learns MTEB's objective, the more it confuses contradiction with entailment. This is not a failure of training---it is the \emph{correct} outcome of the similarity objective. The model is doing exactly what MTEB asks: predicting relatedness. The problem is that MTEB asks the wrong question for interaction tasks.
 
-\subsection{Which Models Are Most Affected?}
+\subsection{Why GloVe Succeeds}
 
-\placeholder{[Analysis of which architectural features or training procedures correlate with large MTEB-MITE rank gaps. Expected findings:}
-\begin{itemize}[leftmargin=*, itemsep=2pt]
-    \item \placeholder{Models trained primarily on retrieval data (e.g., contrastive on MS MARCO) may show large gaps.}
-    \item \placeholder{Models with NLI training data may show smaller gaps on entailment but not necessarily on claim verification.}
-    \item \placeholder{Larger models do not systematically close the gap---model size helps both MTEB and MITE approximately equally.]}
-\end{itemize}
+GloVe \citep{pennington2014glove} is the only model with positive separation. This is counterintuitive---GloVe is a static word-vector average with no sentence-level training. Why does it outperform all transformer models?
+
+GloVe embeddings are trained on word co-occurrence, not on sentence-pair similarity judgments. They have not learned the SICK-R relatedness distribution and therefore have not learned that contradictions should score higher than entailments. Their co-occurrence statistics happen to preserve some entailment signal: entailing sentences share more context words (``A man is playing guitar'' $\to$ ``Someone is making music'') than contradicting sentences (``A man is playing guitar'' $\to$ ``No man is playing guitar''), even though contradicting sentences share more \emph{surface} words.
+
+This finding parallels the ``unlearning'' phenomenon in machine learning: sometimes training on the wrong objective produces worse results than no training at all. Transformer models are not simply ignorant of entailment---they have been trained to systematically mispredict it.
 
 \subsection{Interaction as a Spectrum}
 
-Not all MITE tasks diverge equally from MTEB. Answer quality tasks (FiQA, CQADupstack) may show higher correlation with MTEB retrieval scores than claim verification tasks, because answer quality is partially correlated with relevance: more relevant answers tend to be higher quality. Claim verification, by contrast, is nearly orthogonal to relevance: both supporting and refuting evidence are maximally relevant.
+Not all interaction tasks are equally affected by the similarity-interaction gap. Our three tasks fall on a spectrum:
 
-This suggests a \emph{spectrum} of interaction tasks, from those that are partially predictable by similarity (answer quality) to those that are fundamentally orthogonal (claim verification, entailment). MITE captures this spectrum by including tasks at different points along it.
+\textbf{Maximally conflicting:} SICK-R entailment. Contradictions have \emph{higher} relatedness than entailments. Similarity optimization directly opposes interaction accuracy. MTEB is anti-predictive ($\rho = -0.761$).
 
-\subsection{Implications for Cosine Similarity}
+\textbf{Aligned:} FEVER claim verification. Supporting evidence is more similar to claims than refuting evidence. Similarity optimization partially helps interaction accuracy. MTEB is partially predictive ($\rho = +0.617$).
 
-Our results quantify the cost of using cosine similarity for interaction tasks. The low AUROC scores on claim verification tasks (Table~\ref{tab:per_task}) demonstrate that cosine similarity is structurally insufficient for discriminating interaction valence. This is not a model quality issue---it affects all models roughly equally---but a \emph{representational} issue: a single scalar similarity score cannot encode the multi-dimensional interaction between two texts.
+\textbf{Partially aligned:} SummEval quality. Good summaries tend to resemble their source, but quality also depends on coherence and consistency, which are not similarity. MTEB is weakly predictive ($\rho = +0.500$).
 
-This has implications for system design. A RAG system that uses cosine similarity to retrieve evidence for fact-checking will retrieve both supporting and refuting evidence with equal probability, regardless of which embedding model it uses. The choice of embedding model (and its MTEB rank) is irrelevant to this failure mode. Practitioners need either (a) a post-retrieval interaction classifier, (b) a cross-encoder, or (c) an embedding model specifically trained for interaction discrimination---none of which are evaluated by MTEB.
+This spectrum has practical implications. Practitioners should not assume their interaction task falls at the ``aligned'' end. Any task where semantic opposition co-occurs with topical overlap---entailment, fact-checking polarity, argumentation, legal contradiction, compatibility scoring---is at risk for the similarity-interaction inversion.
+
+\subsection{Connection to Theoretical Results}
+
+Our empirical findings are consistent with the theoretical results of \citet{weller2025limit}, who proved fundamental bounds on the expressiveness of fixed-dimensional embeddings for combinatorial retrieval tasks. Their LIMIT dataset---where queries ask ``who likes X?'' about person descriptions---requires the kind of interaction reasoning that our SICK-R entailment task does: determining a functional relationship (preference match) between two texts, not their topical similarity. The catastrophic failure of all embedding models on LIMIT (12.9\% recall vs.\ 93.6\% for BM25) is the extreme case of the interaction gap we measure.
+
+\citet{steck2024cosine}'s proof that cosine similarity can be arbitrary due to gauge freedom provides another theoretical basis: even if a model \emph{could} encode interaction information, cosine similarity might not surface it. Our results show this is not merely theoretical---in the concrete case of SICK-R, cosine similarity systematically surfaces the \emph{wrong} information for the interaction task.
 
 % ============================================================
-% 8. DISCUSSION
+% 7. DISCUSSION
 % ============================================================
 \section{Discussion}
 \label{sec:discussion}
 
 \subsection{Implications for Practitioners}
 
-The interaction gap has immediate practical implications:
+\textbf{Model selection.} Practitioners building systems that require interaction judgments---entailment detection, claim polarity classification, compatibility scoring---should not rely on MTEB rankings alone. Our results show that MTEB's top-ranked models can be the worst choices for these tasks. Task-specific evaluation on interaction benchmarks is necessary.
 
-\textbf{For retrieval-augmented generation.} RAG systems that retrieve evidence for reasoning tasks (fact-checking, legal analysis, medical decision support) need more than relevance-based retrieval. A system that retrieves highly relevant but contradictory evidence may produce unreliable outputs. MITE scores can help practitioners select models that capture interaction signal, or identify where a post-retrieval interaction classifier is needed.
+\textbf{System design.} A retrieval system that uses cosine similarity to find evidence for fact-checking will retrieve both supporting and refuting evidence with similar scores, regardless of which embedding model is used. The choice of embedding model (and its MTEB rank) is irrelevant to this failure mode. Practitioners need post-retrieval interaction classifiers, cross-encoders, or embedding models specifically trained for interaction discrimination---none of which are evaluated by MTEB.
 
-\textbf{For embedding API customers.} Organizations that purchase embedding API access based on MTEB rankings may be selecting suboptimal models for their actual use case. If the downstream task involves interaction judgments (entailment, claim verification, quality assessment), MTEB rankings are misleading. MITE provides a complementary signal.
+\textbf{Evaluation practice.} We recommend that embedding evaluation suites include at least one interaction task where similarity and interaction are known to conflict. SICK-R entailment serves this purpose using data MTEB already includes, requiring no additional data collection.
 
-\textbf{For model developers.} The low MITE scores across all models suggest an opportunity: training embedding models explicitly for interaction tasks could create substantial differentiation. Current models are optimized for a similarity-dominated benchmark; a model that also optimizes for interaction discrimination would have a unique advantage.
+\subsection{Relationship to nDCG@10}
 
-\subsection{Relationship to Cross-Encoders}
-
-Cross-encoders \citep{nogueira2019passage} naturally handle interaction by jointly encoding both texts. Our results can be interpreted as quantifying the ``cross-encoder advantage'' on interaction tasks: the gap between what bi-encoder cosine similarity can achieve and what the task requires. We note, however, that MITE is designed to evaluate \emph{bi-encoder embeddings}, not to compare bi-encoders and cross-encoders. The latter comparison is well-established; the former---showing that bi-encoder evaluation itself has a blind spot---is our contribution.
+Some practitioners have moved toward nDCG@10 as a primary evaluation metric, following the practice of major embedding providers. nDCG@10 is a retrieval ranking metric that is more practically relevant than STS Spearman for search and RAG applications. However, nDCG@10 is still a similarity/relevance metric---it measures whether relevant documents are ranked highly, not whether the model can distinguish types of relevance (e.g., supporting vs.\ refuting evidence). The interaction gap is orthogonal to the choice between STS and nDCG@10: both are blind to interaction valence.
 
 \subsection{Limitations}
 
-\textbf{Cosine-only evaluation.} By restricting to cosine similarity, we may underestimate models that encode interaction information in ways not captured by the cosine metric (e.g., in the angle between embeddings and a learned reference direction). Future work could explore learned similarity functions on top of fixed embeddings.
+\textbf{MTEB score proxy.} We use each model's STS Spearman on SICK-R as the MTEB comparison score, not the model's overall MTEB leaderboard rank. This is the most controlled comparison (same data, different question) but does not directly evaluate whether overall MTEB rank is predictive. Future work should include official leaderboard scores.
 
-\textbf{English-only.} MITE currently evaluates English datasets only. The interaction gap may be larger or smaller in other languages, and multilingual interaction evaluation is an important direction.
+\textbf{Model coverage.} Our 15 models span MTEB STS scores from 0.554 to 0.812 but do not include recent frontier models (e.g., those from OpenAI, Cohere, Voyage) or models with MTEB scores below 0.50 or above 0.85. Extending the model set could strengthen or weaken the observed correlations.
 
-\textbf{Limited interaction types.} MITE covers four interaction categories. Other important interaction types---including pragmatic implication, argument strength, rhetorical relation, and interpersonal compatibility---are not yet included. We view MITE as a starting point for interaction evaluation, not a comprehensive solution.
+\textbf{Three tasks.} We evaluate three interaction tasks. Important interaction types---including pragmatic implication, argumentation strength, and interpersonal compatibility---are not yet covered. SICK-R provides the cleanest same-data comparison; additional tasks would strengthen the generality claim.
 
-\textbf{Threshold sensitivity.} Some MITE tasks (entailment classification, consistency AUROC) require thresholds that are optimized on validation data. The absolute scores may be sensitive to threshold selection, though model rankings are more robust.
+\textbf{English only.} All experiments are in English. The interaction gap may differ in other languages, particularly those with different negation or contradiction patterns.
 
-\textbf{Model selection.} Our model set, while spanning the MTEB leaderboard, is not exhaustive. Results may differ for recently released models or domain-specific fine-tunes. We release our evaluation code to enable community-driven expansion.
-
-% ============================================================
-% 9. RELATED WORK
-% ============================================================
-\section{Related Work}
-\label{sec:related}
-
-\textbf{Embedding benchmarks.} MTEB \citep{muennighoff2023mteb} is the most comprehensive embedding benchmark, building on BEIR's zero-shot retrieval evaluation \citep{thakur2021beir}. SentEval \citep{reimers2019sentence} preceded both with probing-based evaluation. Our work is complementary: we do not replace MTEB but extend it to cover interaction tasks.
-
-\textbf{Benchmark critique.} \citet{dehghani2021benchmark} and \citet{raji2021benchmarks} have argued that benchmarks can be misleading when they fail to capture the diversity of real-world tasks. Our work provides a concrete example: MTEB's 8 task types all measure similarity, missing an entire category of tasks that practitioners care about.
-
-\textbf{NLI for embeddings.} Sentence-BERT \citep{reimers2019sentence} and SimCSE \citep{gao2021simcse} use NLI data for training, showing that entailment signal improves embedding quality for similarity tasks. Our work asks the converse: does similarity-based evaluation capture entailment ability? Our results suggest it does not.
-
-\textbf{Interaction modeling.} Cross-encoders \citep{nogueira2019passage} jointly encode text pairs for interaction tasks. Knowledge distillation from cross-encoders to bi-encoders \citep{reimers2020distillation} attempts to transfer interaction knowledge into embedding spaces. Our work provides a principled benchmark for evaluating whether this transfer succeeds.
-
-\textbf{Domain-specific interaction tasks.} Job-resume matching \citep{chen2020learning} and complementary product recommendation \citep{jiang2020complementary} are examples of domain-specific interaction tasks that require more than similarity. Our prior work on interpersonal compatibility scoring provided additional evidence that MTEB rankings have near-zero predictive value for interaction tasks in specific domains. MITE generalizes this observation to broadly applicable NLP tasks.
+\textbf{Cosine only.} We restrict to cosine similarity to match MTEB's evaluation protocol. Alternative similarity functions (e.g., learned metrics, asymmetric functions) might recover interaction signal from the same embeddings.
 
 % ============================================================
-% 10. CONCLUSION
+% 8. CONCLUSION
 % ============================================================
 \section{Conclusion}
 \label{sec:conclusion}
 
-We have identified a structural blind spot in text embedding evaluation: the Massive Text Embedding Benchmark (MTEB), despite its breadth and influence, evaluates only similarity tasks. Interaction tasks---where the functional relationship between two texts matters beyond their topical relatedness---are systematically absent.
+We have identified a structural blind spot in text embedding evaluation. The Massive Text Embedding Benchmark (MTEB), despite evaluating 56 datasets across 8 task types, measures only one axis of embedding quality: similarity. Interaction tasks---where the functional relationship between texts matters beyond topical relatedness---are absent.
 
-MITE (Massive Interaction Task Evaluation) fills this gap by reframing existing datasets to evaluate interaction tasks. Using the same data and the same models as MTEB, but asking an interaction question instead of a similarity question, we obtain substantially different model rankings. The Spearman rank correlation between MTEB and MITE is \placeholder{$\rho = 0.XX$}, indicating that MTEB performance is a poor predictor of interaction task performance.
+Using MTEB's own SICK-R dataset, we show that MTEB rankings are \emph{inversely correlated} with entailment discrimination across 15 models ($\rho = -0.761$, $p < 0.001$). This inversion is structural: contradictions are topically related, so models optimized for relatedness systematically confuse contradiction with entailment. The only model that correctly separates them is GloVe---an untrained word-vector average that MTEB ranks last.
 
-The most compelling evidence comes from SICK-R, where the exact same 9,927 sentence pairs are evaluated for similarity by MTEB and for entailment by MITE, yielding a rank correlation of only \placeholder{$\rho = 0.XX$} across models. This demonstrates that the evaluation question, not the data, drives the ranking difference.
+The interaction gap is not a universal failure of MTEB. On tasks where similarity and interaction align (FEVER claim verification, summary quality), MTEB rankings partially transfer. The gap matters precisely when similarity and interaction conflict---a condition that arises structurally in entailment, fact-checking polarity, legal contradiction, and compatibility scoring.
 
-We release MITE as an open-source benchmark, enabling practitioners to evaluate embedding models on interaction tasks alongside similarity tasks. Our results suggest that the NLP community needs both MTEB and MITE: the former for similarity-dependent applications, the latter for interaction-dependent applications. Selecting an embedding model based on MTEB alone is insufficient when the downstream task involves interaction judgments.
+We propose that embedding evaluation suites include interaction tasks alongside similarity tasks. The data already exists in MTEB's datasets---it only needs to be evaluated. Our code is publicly available to enable this evaluation.
 
-The interaction gap is not a flaw in any particular model---it is a gap in how we evaluate models. MITE takes a first step toward closing it.
-
-% ============================================================
-% ACKNOWLEDGMENTS
-% ============================================================
-\section*{Acknowledgments}
-
-\placeholder{[To be added.]}
+The interaction gap is not a flaw in any particular model. It is a gap in how we evaluate models. As embedding models are deployed in increasingly complex reasoning systems, closing this gap becomes essential.
 
 % ============================================================
 % REFERENCES
@@ -609,70 +430,97 @@ The interaction gap is not a flaw in any particular model---it is a gap in how w
 % ============================================================
 \appendix
 
-\section{Dataset Statistics}
-\label{app:data_stats}
+\section{SICK-R Relatedness Distribution}
+\label{app:sickr}
 
-\begin{table}[h]
-\centering
-\caption{Dataset statistics for MITE tasks.}
-\label{tab:data_stats}
-\small
-\begin{tabular}{@{}llrrr@{}}
-\toprule
-\textbf{Task} & \textbf{Dataset} & \textbf{\# Pairs} & \textbf{Label Dist.} & \textbf{Split Used} \\
-\midrule
-Claim Verification & FEVER & 185,445 & S: 80K / R: 30K / N: 75K & Test \\
-Claim Verification & ClimateFEVER & 1,535 & S: 616 / R: 350 / N: 569 & Full \\
-Claim Verification & SciFact & 1,409 & S: 726 / C: 683 & Test \\
-Textual Entailment & SICK-R & 9,927 & E: 2,821 / C: 1,424 / N: 5,682 & Full \\
-Answer Quality & FiQA & \placeholder{XX,XXX} & Continuous (1--5) & Test \\
-Answer Quality & CQADupstack & \placeholder{XX,XXX} & Accepted / Not Accepted & Test \\
-Summary Quality & SummEval & 1,600 & 4-dim continuous (1--5) & Full \\
-\bottomrule
-\end{tabular}
-\end{table}
+The SICK-R dataset contains 9,927 sentence pairs with dual annotations: relatedness scores (1--5) and entailment labels (Entailment/Contradiction/Neutral). We use the 4,906-pair test split for evaluation.
 
-\section{Full Per-Task Rankings}
-\label{app:full_rankings}
+The distribution of relatedness scores by entailment label reveals the structural conflict between similarity and interaction evaluation:
 
-\placeholder{[Full per-task model rankings for all seven MITE tasks, with confidence intervals computed via bootstrap resampling.]}
-
-\section{Evaluation Implementation Details}
-\label{app:implementation}
-
-\paragraph{Entailment classification thresholds.}
-For SICK-R entailment, we optimize two thresholds ($t_1, t_2$) that divide the cosine similarity range into three regions: Entailment ($s > t_1$), Neutral ($t_2 \leq s \leq t_1$), and Contradiction ($s < t_2$). Thresholds are optimized on a 20\% validation split to maximize Macro F1, and evaluation is performed on the remaining 80\%. We report the mean and standard deviation across 5 random validation/test splits.
-
-\paragraph{Claim verification evaluation.}
-For FEVER, ClimateFEVER, and SciFact, we compute cosine similarity between each claim embedding and its associated evidence embedding. NOT\_ENOUGH\_INFO pairs are excluded from the support-vs.-refute discrimination evaluation. For ClimateFEVER, DISPUTED labels are also excluded from the binary discrimination, but are included in a supplementary three-way evaluation.
-
-\paragraph{Answer quality evaluation.}
-For FiQA, we restrict to question-answer pairs where the answer has been retrieved (cosine similarity in the top $k$ for that question) to ensure we evaluate quality discrimination among relevant answers. For CQADupstack, we evaluate across all 12 StackExchange topics and report the macro-average.
-
-\paragraph{Computational cost.}
-Evaluating a single model on all seven MITE tasks requires encoding approximately \placeholder{XXX,XXX} texts. For a model with 335M parameters running on a single A100 GPU, this takes approximately \placeholder{XX} minutes. API-based models (OpenAI, Voyage, Cohere) are evaluated via API calls at a cost of approximately \placeholder{\$X.XX} per model per full evaluation.
-
-\section{Relationship Between Similarity and Interaction Labels in SICK-R}
-\label{app:sickr_analysis}
-
-\begin{table}[h]
-\centering
-\caption{Mean relatedness score (1--5) by entailment label in SICK-R. Entailing pairs have higher relatedness than contradicting pairs on average, but the distributions overlap substantially.}
-\label{tab:sickr_overlap}
-\small
+\begin{center}
 \begin{tabular}{@{}lccc@{}}
 \toprule
 \textbf{Entailment Label} & \textbf{Mean Relatedness} & \textbf{Std.} & \textbf{Count} \\
 \midrule
-Entailment    & 4.25 & 0.58 & 2,821 \\
-Neutral       & 3.17 & 0.91 & 5,682 \\
-Contradiction & 3.55 & 0.64 & 1,424 \\
+Contradiction & 4.57 & 0.49 & 1,424 \\
+Entailment & 3.88 & 0.72 & 2,821 \\
+Neutral & 2.99 & 0.91 & 5,682 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{center}
 
-Table~\ref{tab:sickr_overlap} reveals why similarity and entailment produce different rankings. Contradicting pairs have \emph{higher} average relatedness than neutral pairs (3.55 vs.\ 3.17), because contradiction requires topical overlap---you can only contradict a statement about the same subject. This means a model optimized for similarity will assign higher scores to contradictions than to neutral pairs, exactly the opposite of what an entailment model should do.
+The ordering---Contradiction $>$ Entailment $>$ Neutral in relatedness---is the inverse of what an entailment model should produce. A model that perfectly predicts relatedness scores will assign highest similarity to contradictions, systematically misclassifying them.
 
-This is the core of the interaction gap: similarity and interaction are not just different---they can be \emph{inversely correlated} in critical regions. A model that perfectly predicts relatedness scores will systematically confuse contradiction with entailment.
+\section{Full Model Results}
+\label{app:full_results}
+
+\subsection{SICK-R: All 15 Models}
+
+Complete results including mean cosine similarity for each entailment class:
+
+\begin{center}
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Model} & \textbf{MTEB $\rho$} & \textbf{Sep. ($d$)} & $\bar{s}_E$ & $\bar{s}_C$ & $\bar{s}_N$ \\
+\midrule
+GloVe 6B 300d & 0.554 & +0.530 & 0.951 & 0.897 & -- \\
+paraphrase-MiniLM-L3 & 0.762 & $-0.959$ & 0.765 & 0.876 & -- \\
+all-MiniLM-L6-v2 & 0.772 & $-0.902$ & 0.757 & 0.864 & -- \\
+e5-base-v2 & 0.775 & $-1.418$ & 0.893 & 0.950 & -- \\
+nomic-embed-v1.5 & 0.780 & $-0.999$ & 0.852 & 0.922 & -- \\
+gte-base & 0.783 & $-1.078$ & 0.923 & 0.959 & -- \\
+e5-large-v2 & 0.787 & $-2.256$ & 0.870 & 0.956 & -- \\
+e5-small-v2 & 0.787 & $-2.169$ & 0.882 & 0.960 & -- \\
+gte-large & 0.791 & $-1.280$ & 0.919 & 0.961 & -- \\
+bge-small-en-v1.5 & 0.791 & $-1.882$ & 0.776 & 0.918 & -- \\
+multilingual-e5-large & 0.798 & $-2.299$ & 0.873 & 0.958 & -- \\
+bge-base-en-v1.5 & 0.799 & $-1.860$ & 0.762 & 0.909 & -- \\
+all-distilroberta-v1 & 0.801 & $-1.856$ & 0.629 & 0.858 & -- \\
+all-mpnet-base-v2 & 0.805 & $-2.456$ & 0.545 & 0.860 & -- \\
+bge-large-en-v1.5 & 0.812 & $-2.108$ & 0.751 & 0.914 & -- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{FEVER: 9 Models}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Model} & \textbf{MTEB $\rho$} & \textbf{Sep.} & \textbf{AUROC} & $\bar{s}_S$ / $\bar{s}_R$ \\
+\midrule
+all-MiniLM-L6-v2 & 0.772 & 0.786 & 0.712 & 0.686 / 0.590 \\
+e5-base-v2 & 0.775 & 0.758 & 0.708 & 0.868 / 0.840 \\
+nomic-embed-v1.5 & 0.780 & 0.689 & 0.689 & 0.811 / 0.762 \\
+gte-base & 0.783 & 0.680 & 0.688 & 0.920 / 0.900 \\
+e5-small-v2 & 0.787 & 0.852 & 0.727 & 0.881 / 0.850 \\
+e5-large-v2 & 0.787 & 0.731 & 0.697 & 0.855 / 0.827 \\
+bge-small-en-v1.5 & 0.791 & 0.917 & 0.748 & 0.799 / 0.730 \\
+bge-base-en-v1.5 & 0.799 & 0.949 & 0.750 & 0.775 / 0.701 \\
+all-mpnet-base-v2 & 0.805 & 0.815 & 0.723 & 0.688 / 0.582 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{SummEval: 7 Models}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Model} & \textbf{MTEB $\rho$} & \textbf{Mean Spearman} & \textbf{Pairwise Acc.} \\
+\midrule
+GloVe 6B 300d & 0.554 & 0.196 & 0.573 \\
+paraphrase-MiniLM-L3 & 0.762 & 0.287 & 0.610 \\
+all-MiniLM-L6-v2 & 0.772 & 0.247 & 0.593 \\
+e5-small-v2 & 0.787 & 0.272 & 0.602 \\
+bge-small-en-v1.5 & 0.791 & 0.308 & 0.618 \\
+bge-base-en-v1.5 & 0.799 & 0.330 & 0.625 \\
+all-distilroberta-v1 & 0.801 & 0.254 & 0.597 \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 \end{document}
